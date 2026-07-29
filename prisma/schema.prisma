@@ -1,0 +1,55 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  papers    Paper[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Paper {
+  id               String      @id @default(cuid())
+  title            String
+  subject          String
+  totalMarks       Int
+  totalHours       Float
+  userId           String
+  user             User        @relation(fields: [userId], references: [id])
+  questions        Question[]
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  questionSplitup  Json
+}
+
+model Question {
+  id           String      @id @default(cuid())
+  paperId      String
+  paper        Paper       @relation(fields: [paperId], references: [id])
+  type         QuestionType
+  text         String
+  options      Json?
+  answer       Json
+  marks        Int
+  order        Int
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+}
+
+enum QuestionType {
+  MCQ
+  FILL_IN_BLANKS
+  MATCH_THE_FOLLOWING
+  TRUE_FALSE
+  SHORT_ANSWER
+  DESCRIPTIVE
+  DETAILED
+}
