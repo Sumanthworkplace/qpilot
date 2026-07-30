@@ -23,7 +23,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 <Home className="inline h-4 w-4 mr-1" />
                 Home
               </Link>
-              <Link href="/new-paper" className="px-3 py-2 rounded-md text-sm text-gray-600 hover:bg-gray-50">
+              <Link href="/newpaper" className="px-3 py-2 rounded-md text-sm text-gray-600 hover:bg-gray-50">
                 <Plus className="inline h-4 w-4 mr-1" />
                 New Paper
               </Link>

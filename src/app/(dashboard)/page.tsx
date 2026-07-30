@@ -20,7 +20,7 @@ export default function DashboardHome() {
 
         {/* Quick Actions */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-          <Link href="/new-paper">
+          <Link href="/newpaper">
             <div className="bg-white p-6 rounded-xl shadow-md hover:shadow-lg transition-shadow cursor-pointer border-2 border-transparent hover:border-blue-500">
               <div className="flex items-center gap-3 mb-3">
                 <Plus className="h-8 w-8 text-blue-600" />
