@@ -2,7 +2,6 @@
   "name": "qpilot",
   "version": "1.0.0",
   "private": true,
-  "description": "AI-powered question paper generator for teachers",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
