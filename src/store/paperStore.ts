@@ -24,6 +24,7 @@ const initialSplitup: QuestionSplitup = {
   shortAnswer: { count: 0, marksPerQuestion: 0 },
   descriptive: { count: 0, marksPerQuestion: 0 },
   detailed: { count: 0, marksPerQuestion: 0 },
+  imageBased: { count: 0, marksPerQuestion: 0 },
 };
 
 const initialPaper: Paper = {
