@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma/client';
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
 
     const paper = await prisma.paper.create({
       data: {
-        title,
+        title: title ?? subject,
         subject,
         totalMarks,
         totalHours,
@@ -74,9 +74,10 @@ export async function POST(req: NextRequest) {
             type: q.type,
             text: q.text,
             options: q.options ? JSON.stringify(q.options) : null,
-            answer: JSON.stringify(q.answer),
+            answer: JSON.stringify(q.answer ?? ''),
             marks: q.marks,
             order: q.order ?? index,
+            imageUrl: q.imageUrl ?? null,
           })),
         },
       },

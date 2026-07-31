@@ -4,116 +4,258 @@ import {
   Packer,
   Paragraph,
   TextRun,
-  HeadingLevel,
-  AlignmentType,
+  Table,
+  TableRow,
+  TableCell,
+  WidthType,
   BorderStyle,
+  AlignmentType,
+  VerticalAlign,
+  ShadingType,
 } from 'docx';
-import { Paper, Question } from '@/types';
+import { Paper, Question, QuestionType } from '@/types';
 
-function buildQuestionParagraphs(paper: Paper): Paragraph[] {
-  const paragraphs: Paragraph[] = [];
+const SECTION_LETTERS = 'ABCDEFGH';
 
-  paper.questions.forEach((q: Question, index: number) => {
-    paragraphs.push(
+const TYPE_ORDER: QuestionType[] = [
+  'MCQ',
+  'FILL_IN_BLANKS',
+  'MATCH_THE_FOLLOWING',
+  'TRUE_FALSE',
+  'SHORT_ANSWER',
+  'DESCRIPTIVE',
+  'DETAILED',
+  'IMAGE_BASED',
+];
+
+function groupByType(questions: Question[]) {
+  return TYPE_ORDER.map((type) => questions.filter((q) => q.type === type)).filter(
+    (group) => group.length > 0
+  );
+}
+
+const cellBorder = {
+  top: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
+  bottom: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
+  left: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
+  right: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
+};
+
+function headerCell(text: string, width: number): TableCell {
+  return new TableCell({
+    width: { size: width, type: WidthType.DXA },
+    borders: cellBorder,
+    shading: { type: ShadingType.CLEAR, fill: 'F0F0F0' },
+    verticalAlign: VerticalAlign.CENTER,
+    children: [
       new Paragraph({
-        spacing: { before: 200, after: 100 },
-        children: [
-          new TextRun({ text: `${index + 1}. `, bold: true }),
-          new TextRun({ text: q.text }),
-          new TextRun({ text: `  (${q.marks} marks)`, italics: true }),
-        ],
-      })
-    );
+        alignment: AlignmentType.CENTER,
+        children: [new TextRun({ text, bold: true })],
+      }),
+    ],
+  });
+}
 
-    if (q.options && Array.isArray(q.options) && q.options.length > 0) {
-      q.options.forEach((opt: string, idx: number) => {
-        paragraphs.push(
-          new Paragraph({
-            indent: { left: 400 },
-            children: [new TextRun({ text: `${String.fromCharCode(65 + idx)}. ${opt}` })],
+function questionParagraphs(q: Question): Paragraph[] {
+  const paras = [new Paragraph({ children: [new TextRun({ text: q.text ?? '' })] })];
+
+  if (q.type === 'MCQ' && q.options && Array.isArray(q.options)) {
+    (q.options as string[]).forEach((opt, i) => {
+      paras.push(
+        new Paragraph({
+          indent: { left: 300 },
+          children: [new TextRun({ text: `${String.fromCharCode(97 + i)}) ${opt}` })],
+        })
+      );
+    });
+  } else if (q.type === 'TRUE_FALSE') {
+    paras.push(new Paragraph({ children: [new TextRun({ text: '(True / False)', italics: true })] }));
+  } else if (q.type === 'MATCH_THE_FOLLOWING' && q.options && !Array.isArray(q.options)) {
+    const pairs = q.options as { left: string[]; right: string[] };
+    pairs.left.forEach((l, i) => {
+      paras.push(
+        new Paragraph({
+          indent: { left: 300 },
+          children: [new TextRun({ text: `${i + 1}. ${l}    \u2014    ${pairs.right[i] ?? ''}` })],
+        })
+      );
+    });
+  } else if (q.type === 'IMAGE_BASED') {
+    paras.push(new Paragraph({ children: [new TextRun({ text: '[See attached image]', italics: true })] }));
+  }
+
+  return paras;
+}
+
+function buildQuestionTable(groups: Question[][], marksHeader: string, isAnswerKey: boolean): Table {
+  const rows: TableRow[] = [
+    new TableRow({
+      tableHeader: true,
+      children: [
+        headerCell('Section', 1200),
+        headerCell('#', 500),
+        headerCell('Question', 6500),
+        headerCell(marksHeader, 1200),
+      ],
+    }),
+  ];
+
+  let qNum = 1;
+  groups.forEach((group, gIdx) => {
+    const letter = SECTION_LETTERS[gIdx];
+    group.forEach((q, i) => {
+      const cells: TableCell[] = [];
+
+      if (i === 0) {
+        cells.push(
+          new TableCell({
+            width: { size: 1200, type: WidthType.DXA },
+            borders: cellBorder,
+            verticalAlign: VerticalAlign.CENTER,
+            rowSpan: group.length,
+            children: [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ text: `SECTION ${letter}`, bold: true })],
+              }),
+            ],
           })
         );
-      });
-    }
+      }
+
+      cells.push(
+        new TableCell({
+          width: { size: 500, type: WidthType.DXA },
+          borders: cellBorder,
+          children: [new Paragraph({ children: [new TextRun({ text: `${qNum}.` })] })],
+        })
+      );
+
+      let lastCellContent: Paragraph[];
+      if (isAnswerKey) {
+        let answerText: string;
+        if (q.type === 'MCQ' && q.answer) {
+          const idx = (q.options as string[])?.indexOf(q.answer as string) ?? -1;
+          answerText = idx >= 0 ? `${String.fromCharCode(97 + idx)}) ${q.answer}` : String(q.answer);
+        } else if (q.type === 'MATCH_THE_FOLLOWING' && Array.isArray(q.answer)) {
+          answerText = (q.answer as { left: string; right: string }[])
+            .map((m, i2) => `${i2 + 1}. ${m.left} -> ${m.right}`)
+            .join('; ');
+        } else if (Array.isArray(q.answer)) {
+          answerText = q.answer.join(', ');
+        } else {
+          answerText = String(q.answer ?? '');
+        }
+        cells.push(
+          new TableCell({
+            width: { size: 6500, type: WidthType.DXA },
+            borders: cellBorder,
+            children: [new Paragraph({ children: [new TextRun({ text: q.text ?? '' })] })],
+          })
+        );
+        lastCellContent = [new Paragraph({ children: [new TextRun({ text: answerText, color: '166534' })] })];
+      } else {
+        cells.push(
+          new TableCell({
+            width: { size: 6500, type: WidthType.DXA },
+            borders: cellBorder,
+            children: questionParagraphs(q),
+          })
+        );
+        lastCellContent = [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: String(q.marks) })] })];
+      }
+
+      cells.push(
+        new TableCell({
+          width: { size: 1200, type: WidthType.DXA },
+          borders: cellBorder,
+          children: lastCellContent,
+        })
+      );
+
+      rows.push(new TableRow({ children: cells }));
+      qNum++;
+    });
   });
 
-  return paragraphs;
-}
-
-function buildAnswerParagraphs(paper: Paper): Paragraph[] {
-  const paragraphs: Paragraph[] = [];
-
-  paper.questions.forEach((q: Question, index: number) => {
-    paragraphs.push(
-      new Paragraph({
-        spacing: { before: 200, after: 50 },
-        children: [
-          new TextRun({ text: `Q${index + 1}: `, bold: true }),
-          new TextRun({ text: q.text }),
-        ],
-      })
-    );
-
-    let answerText: string;
-    if (q.type === 'MATCH_THE_FOLLOWING') {
-      const matches = q.answer as { left: string; right: string }[];
-      answerText = matches.map((m) => `${m.left} -> ${m.right}`).join('; ');
-    } else if (Array.isArray(q.answer)) {
-      answerText = q.answer.join(', ');
-    } else {
-      answerText = String(q.answer);
-    }
-
-    paragraphs.push(
-      new Paragraph({
-        indent: { left: 400 },
-        children: [
-          new TextRun({ text: 'Answer: ', bold: true, color: '2E7D32' }),
-          new TextRun({ text: answerText }),
-        ],
-      })
-    );
+  return new Table({
+    width: { size: 9400, type: WidthType.DXA },
+    columnWidths: [1200, 500, 6500, 1200],
+    rows,
   });
-
-  return paragraphs;
 }
 
-function buildDocument(paper: Paper, type: 'question_paper' | 'answer_key'): Document {
-  const title = type === 'question_paper' ? 'QUESTION PAPER' : 'ANSWER KEY';
-  const bodyParagraphs =
-    type === 'question_paper' ? buildQuestionParagraphs(paper) : buildAnswerParagraphs(paper);
+function buildInstructions(paper: Paper, groups: Question[][]): Paragraph[] {
+  const sectionSummary = groups
+    .map((group, i) => {
+      const letter = SECTION_LETTERS[i];
+      const marks = group[0]?.marks ?? 0;
+      return `Section-${letter} has ${group.length} question${group.length > 1 ? 's' : ''} of ${marks} mark${marks > 1 ? 's' : ''} each`;
+    })
+    .join('; ');
+
+  return [
+    new Paragraph({ children: [new TextRun({ text: 'General Instructions:', bold: true })] }),
+    new Paragraph({
+      children: [new TextRun({ text: `(i) All ${paper.questions.length} questions are compulsory.` })],
+    }),
+    new Paragraph({ children: [new TextRun({ text: `(ii) ${sectionSummary}.` })] }),
+    new Paragraph({
+      spacing: { after: 200 },
+      children: [new TextRun({ text: '(iii) Marks for each question are indicated against it.' })],
+    }),
+  ];
+}
+
+function buildDocument(paper: Paper, isAnswerKey: boolean): Document {
+  const groups = groupByType(paper.questions ?? []);
+
+  const headerParagraphs = [
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      children: [new TextRun({ text: (paper.subject ?? 'QUESTION PAPER').toUpperCase(), bold: true, size: 32 })],
+    }),
+    new Paragraph({
+      spacing: { after: 100 },
+      children: [new TextRun({ text: `Total Marks: ${paper.totalMarks}` })],
+    }),
+    new Paragraph({
+      spacing: { after: 200 },
+      children: [
+        new TextRun({ text: `Duration: ${paper.totalHours} hr${paper.totalHours !== 1 ? 's' : ''}` }),
+      ],
+    }),
+  ];
+
+  if (isAnswerKey) {
+    return new Document({
+      sections: [
+        {
+          properties: {},
+          children: [
+            ...headerParagraphs,
+            buildQuestionTable(groups, 'Answer', true),
+          ],
+        },
+      ],
+    });
+  }
 
   return new Document({
     sections: [
       {
         properties: {},
         children: [
+          ...headerParagraphs,
           new Paragraph({
-            heading: HeadingLevel.TITLE,
-            alignment: AlignmentType.CENTER,
-            children: [new TextRun({ text: title, bold: true, size: 36 })],
-          }),
-          new Paragraph({
-            border: {
-              bottom: { style: BorderStyle.SINGLE, size: 6, color: '3498DB' },
-            },
-            spacing: { after: 200 },
-            children: [],
-          }),
-          new Paragraph({
-            children: [new TextRun({ text: `Subject: ${paper.subject}`, bold: true })],
-          }),
-          new Paragraph({
-            children: [new TextRun({ text: `Total Marks: ${paper.totalMarks}` })],
-          }),
-          new Paragraph({
-            children: [new TextRun({ text: `Total Hours: ${paper.totalHours}` })],
+            children: [new TextRun({ text: 'Roll No: ____________' })],
           }),
           new Paragraph({
             spacing: { after: 200 },
-            children: [new TextRun({ text: `Date: ${new Date().toLocaleDateString()}` })],
+            children: [new TextRun({ text: 'Name: ________________________________' })],
           }),
-          ...bodyParagraphs,
+          ...buildInstructions(paper, groups),
+          buildQuestionTable(groups, 'Marks', false),
         ],
       },
     ],
@@ -138,7 +280,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const doc = buildDocument(paper, type);
+    const doc = buildDocument(paper, type === 'answer_key');
     const buffer = await Packer.toBuffer(doc);
 
     const filename = `${type}_${paper.subject}_${new Date().toISOString().split('T')[0]}.docx`;

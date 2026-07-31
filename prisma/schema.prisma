@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -41,6 +41,7 @@ model Question {
   answer       String
   marks        Int
   order        Int
+  imageUrl     String?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 }

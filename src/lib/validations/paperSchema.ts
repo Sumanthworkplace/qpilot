@@ -13,6 +13,7 @@ export const questionSplitupSchema = z.object({
   shortAnswer: splitupEntry,
   descriptive: splitupEntry,
   detailed: splitupEntry,
+  imageBased: splitupEntry,
 });
 
 export const questionTypeSchema = z.enum([
@@ -23,6 +24,7 @@ export const questionTypeSchema = z.enum([
   'SHORT_ANSWER',
   'DESCRIPTIVE',
   'DETAILED',
+  'IMAGE_BASED',
 ]);
 
 export const questionSchema = z.object({
@@ -35,17 +37,20 @@ export const questionSchema = z.object({
       z.object({ left: z.array(z.string()), right: z.array(z.string()) }),
     ])
     .optional(),
-  answer: z.union([
-    z.string(),
-    z.array(z.string()),
-    z.array(z.object({ left: z.string(), right: z.string() })),
-  ]),
+  answer: z
+    .union([
+      z.string(),
+      z.array(z.string()),
+      z.array(z.object({ left: z.string(), right: z.string() })),
+    ])
+    .optional(),
   marks: z.number().int().min(1),
   order: z.number().int().min(0),
+  imageUrl: z.string().optional(),
 });
 
 export const paperSchema = z.object({
-  title: z.string().min(1, 'Title is required'),
+  title: z.string().min(1).optional(),
   subject: z.string().min(1, 'Subject is required'),
   totalMarks: z.number().int().min(1),
   totalHours: z.number().min(0),
