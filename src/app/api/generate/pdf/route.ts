@@ -17,9 +17,19 @@ const TYPE_ORDER: QuestionType[] = [
 ];
 
 function groupByType(questions: Question[]) {
-  return TYPE_ORDER.map((type) => questions.filter((q) => q.type === type)).filter(
+  const groups = TYPE_ORDER.map((type) => questions.filter((q) => q.type === type)).filter(
     (group) => group.length > 0
   );
+
+  // Safety net: any question whose type didn't match a known TYPE_ORDER value
+  // would otherwise silently vanish from the output. Catch those here instead.
+  const matched = new Set(groups.flat());
+  const unmatched = questions.filter((q) => !matched.has(q));
+  if (unmatched.length > 0) {
+    groups.push(unmatched);
+  }
+
+  return groups;
 }
 
 function questionContent(q: Question): string {
@@ -45,7 +55,7 @@ function buildInstructions(paper: Paper, groups: Question[][]): string[] {
 
   const sectionSummary = groups
     .map((group, i) => {
-      const letter = SECTION_LETTERS[i];
+      const letter = i < SECTION_LETTERS.length ? SECTION_LETTERS[i] : i + 1;
       const marks = group[0]?.marks ?? 0;
       return `Section-${letter} has ${group.length} question${group.length > 1 ? 's' : ''} of ${marks} mark${marks > 1 ? 's' : ''} each`;
     })
@@ -105,7 +115,7 @@ function generateQuestionPaper(paper: Paper): jsPDF {
   const body: (string | number | { content: string; rowSpan: number })[][] = [];
 
   groups.forEach((group, gIdx) => {
-    const letter = SECTION_LETTERS[gIdx];
+    const letter = gIdx < SECTION_LETTERS.length ? SECTION_LETTERS[gIdx] : gIdx + 1;
     group.forEach((q, i) => {
       body.push([
         i === 0 ? { content: `SECTION ${letter}`, rowSpan: group.length } : '',
@@ -116,6 +126,14 @@ function generateQuestionPaper(paper: Paper): jsPDF {
       qNum++;
     });
   });
+
+  // Avoid starting the table (or its header) with too little room left on the page —
+  // otherwise autoTable can print an orphaned header with no rows beneath it before breaking.
+  const MIN_TABLE_START_ROOM = 40;
+  if (pageHeight - y < MIN_TABLE_START_ROOM) {
+    doc.addPage();
+    y = 20;
+  }
 
   // @ts-expect-error jspdf-autotable attaches autoTable to the jsPDF prototype at runtime
   doc.autoTable({
@@ -131,6 +149,7 @@ function generateQuestionPaper(paper: Paper): jsPDF {
       3: { cellWidth: 16, halign: 'center' },
     },
     margin: { left: 20, right: 20 },
+    rowPageBreak: 'avoid',
   });
 
   // @ts-expect-error jspdf-autotable adds this property to the doc at runtime
@@ -165,7 +184,7 @@ function generateAnswerKey(paper: Paper): jsPDF {
   const body: (string | number | { content: string; rowSpan: number })[][] = [];
 
   groups.forEach((group, gIdx) => {
-    const letter = SECTION_LETTERS[gIdx];
+    const letter = gIdx < SECTION_LETTERS.length ? SECTION_LETTERS[gIdx] : gIdx + 1;
     group.forEach((q, i) => {
       let answerText: string;
       if (q.type === 'MCQ' && q.answer) {
@@ -205,6 +224,7 @@ function generateAnswerKey(paper: Paper): jsPDF {
       3: { cellWidth: 45, textColor: [22, 101, 52] },
     },
     margin: { left: 20, right: 20 },
+    rowPageBreak: 'avoid',
   });
 
   const pageCount = doc.internal.pages.length - 1;

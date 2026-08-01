@@ -29,9 +29,17 @@ const TYPE_ORDER: QuestionType[] = [
 ];
 
 function groupByType(questions: Question[]) {
-  return TYPE_ORDER.map((type) => questions.filter((q) => q.type === type)).filter(
+  const groups = TYPE_ORDER.map((type) => questions.filter((q) => q.type === type)).filter(
     (group) => group.length > 0
   );
+
+  const matched = new Set(groups.flat());
+  const unmatched = questions.filter((q) => !matched.has(q));
+  if (unmatched.length > 0) {
+    groups.push(unmatched);
+  }
+
+  return groups;
 }
 
 const cellBorder = {
@@ -102,7 +110,7 @@ function buildQuestionTable(groups: Question[][], marksHeader: string, isAnswerK
 
   let qNum = 1;
   groups.forEach((group, gIdx) => {
-    const letter = SECTION_LETTERS[gIdx];
+    const letter = gIdx < SECTION_LETTERS.length ? SECTION_LETTERS[gIdx] : gIdx + 1;
     group.forEach((q, i) => {
       const cells: TableCell[] = [];
 
@@ -188,7 +196,7 @@ function buildQuestionTable(groups: Question[][], marksHeader: string, isAnswerK
 function buildInstructions(paper: Paper, groups: Question[][]): Paragraph[] {
   const sectionSummary = groups
     .map((group, i) => {
-      const letter = SECTION_LETTERS[i];
+      const letter = i < SECTION_LETTERS.length ? SECTION_LETTERS[i] : i + 1;
       const marks = group[0]?.marks ?? 0;
       return `Section-${letter} has ${group.length} question${group.length > 1 ? 's' : ''} of ${marks} mark${marks > 1 ? 's' : ''} each`;
     })
