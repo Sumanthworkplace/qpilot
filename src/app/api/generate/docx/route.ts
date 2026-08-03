@@ -4,6 +4,7 @@ import {
   Packer,
   Paragraph,
   TextRun,
+  ImageRun,
   Table,
   TableRow,
   TableCell,
@@ -13,6 +14,7 @@ import {
   VerticalAlign,
   ShadingType,
 } from 'docx';
+import imageSize from 'image-size';
 import { Paper, Question, QuestionType } from '@/types';
 
 const SECTION_LETTERS = 'ABCDEFGH';
@@ -27,6 +29,23 @@ const TYPE_ORDER: QuestionType[] = [
   'DETAILED',
   'IMAGE_BASED',
 ];
+
+function parseDataUrl(dataUrl?: string): { buffer: Buffer; format: 'jpg' | 'png' | 'gif' | 'bmp' } | null {
+  if (!dataUrl) return null;
+  const match = dataUrl.match(/^data:image\/(\w+);base64,(.+)$/);
+  if (!match) return null;
+  const rawFormat = match[1].toLowerCase();
+  const formatMap: Record<string, 'jpg' | 'png' | 'gif' | 'bmp'> = {
+    jpeg: 'jpg',
+    jpg: 'jpg',
+    png: 'png',
+    gif: 'gif',
+    bmp: 'bmp',
+  };
+  const format = formatMap[rawFormat];
+  if (!format) return null;
+  return { buffer: Buffer.from(match[2], 'base64'), format };
+}
 
 function groupByType(questions: Question[]) {
   const groups = TYPE_ORDER.map((type) => questions.filter((q) => q.type === type)).filter(
@@ -89,7 +108,28 @@ function questionParagraphs(q: Question): Paragraph[] {
       );
     });
   } else if (q.type === 'IMAGE_BASED') {
-    paras.push(new Paragraph({ children: [new TextRun({ text: '[See attached image]', italics: true })] }));
+    const parsed = parseDataUrl(q.imageUrl);
+    if (parsed) {
+      try {
+        const dims = imageSize(parsed.buffer);
+        const maxWidth = 300;
+        const ratio = dims.height && dims.width ? dims.height / dims.width : 1;
+        paras.push(
+          new Paragraph({
+            children: [
+              new ImageRun({
+                data: parsed.buffer,
+                transformation: { width: maxWidth, height: Math.round(maxWidth * ratio) },
+              }),
+            ],
+          })
+        );
+      } catch {
+        paras.push(new Paragraph({ children: [new TextRun({ text: '[Could not render image]', italics: true })] }));
+      }
+    } else {
+      paras.push(new Paragraph({ children: [new TextRun({ text: '[No image attached]', italics: true })] }));
+    }
   }
 
   return paras;

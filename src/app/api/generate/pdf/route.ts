@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import imageSize from 'image-size';
 import { Paper, Question, QuestionType } from '@/types';
 
 const SECTION_LETTERS = 'ABCDEFGH';
@@ -15,6 +16,13 @@ const TYPE_ORDER: QuestionType[] = [
   'DETAILED',
   'IMAGE_BASED',
 ];
+
+function parseDataUrl(dataUrl?: string): { format: string; buffer: Buffer } | null {
+  if (!dataUrl) return null;
+  const match = dataUrl.match(/^data:image\/(\w+);base64,(.+)$/);
+  if (!match) return null;
+  return { format: match[1].toUpperCase(), buffer: Buffer.from(match[2], 'base64') };
+}
 
 function groupByType(questions: Question[]) {
   const groups = TYPE_ORDER.map((type) => questions.filter((q) => q.type === type)).filter(
@@ -32,7 +40,7 @@ function groupByType(questions: Question[]) {
   return groups;
 }
 
-function questionContent(q: Question): string {
+function questionContent(q: Question, qNum?: number): string {
   let content = q.text ?? '';
 
   if (q.type === 'MCQ' && q.options && Array.isArray(q.options)) {
@@ -44,7 +52,9 @@ function questionContent(q: Question): string {
     const rows = pairs.left.map((l, i) => `${i + 1}. ${l}    \u2014    ${pairs.right[i] ?? ''}`);
     content += '\n' + rows.join('\n');
   } else if (q.type === 'IMAGE_BASED') {
-    content += '\n[See attached image]';
+    content += parseDataUrl(q.imageUrl)
+      ? '\n(See image at the end of this paper)'
+      : '\n[Image not available]';
   }
 
   return content;
@@ -113,6 +123,7 @@ function generateQuestionPaper(paper: Paper): jsPDF {
 
   let qNum = 1;
   const body: (string | number | { content: string; rowSpan: number })[][] = [];
+  const imageQuestions: { qNum: number; q: Question }[] = [];
 
   groups.forEach((group, gIdx) => {
     const letter = gIdx < SECTION_LETTERS.length ? SECTION_LETTERS[gIdx] : gIdx + 1;
@@ -123,6 +134,9 @@ function generateQuestionPaper(paper: Paper): jsPDF {
         questionContent(q),
         q.marks,
       ]);
+      if (q.type === 'IMAGE_BASED' && parseDataUrl(q.imageUrl)) {
+        imageQuestions.push({ qNum, q });
+      }
       qNum++;
     });
   });
@@ -152,8 +166,52 @@ function generateQuestionPaper(paper: Paper): jsPDF {
     rowPageBreak: 'avoid',
   });
 
-  // @ts-expect-error jspdf-autotable adds this property to the doc at runtime
-  const finalY = doc.lastAutoTable.finalY ?? y;
+  if (imageQuestions.length > 0) {
+    doc.addPage();
+    let imgY = 20;
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Image Reference', pageWidth / 2, imgY, { align: 'center' });
+    imgY += 12;
+
+    const maxWidthMm = pageWidth - 40;
+
+    imageQuestions.forEach(({ qNum: refNum, q }) => {
+      const parsed = parseDataUrl(q.imageUrl);
+      if (!parsed) return;
+
+      let dims;
+      try {
+        dims = imageSize(parsed.buffer);
+      } catch {
+        return;
+      }
+      const ratio = dims.height && dims.width ? dims.height / dims.width : 1;
+      const w = Math.min(maxWidthMm, 100);
+      const h = w * ratio;
+
+      if (imgY + h + 20 > pageHeight - 20) {
+        doc.addPage();
+        imgY = 20;
+      }
+
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Question ${refNum}`, 20, imgY);
+      imgY += 6;
+
+      try {
+        doc.addImage(q.imageUrl!, parsed.format, 20, imgY, w, h);
+        imgY += h + 12;
+      } catch {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.text('[Could not render image]', 20, imgY);
+        imgY += 10;
+      }
+    });
+  }
+
   const pageCount = doc.internal.pages.length - 1;
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
