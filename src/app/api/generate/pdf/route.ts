@@ -128,12 +128,10 @@ function generateQuestionPaper(paper: Paper): jsPDF {
   groups.forEach((group, gIdx) => {
     const letter = gIdx < SECTION_LETTERS.length ? SECTION_LETTERS[gIdx] : gIdx + 1;
     group.forEach((q, i) => {
-      body.push([
-        i === 0 ? { content: `SECTION ${letter}`, rowSpan: group.length } : '',
-        `${qNum}.`,
-        questionContent(q),
-        q.marks,
-      ]);
+      const row: (string | number | { content: string; rowSpan: number })[] =
+        i === 0 ? [{ content: `SECTION ${letter}`, rowSpan: group.length }] : [];
+      row.push(`${qNum}.`, questionContent(q), q.marks);
+      body.push(row);
       if (q.type === 'IMAGE_BASED' && parseDataUrl(q.imageUrl)) {
         imageQuestions.push({ qNum, q });
       }
@@ -258,12 +256,10 @@ function generateAnswerKey(paper: Paper): jsPDF {
         answerText = String(q.answer ?? '');
       }
 
-      body.push([
-        i === 0 ? { content: `SECTION ${letter}`, rowSpan: group.length } : '',
-        `${qNum}.`,
-        q.text ?? '',
-        answerText,
-      ]);
+      const row: (string | number | { content: string; rowSpan: number })[] =
+        i === 0 ? [{ content: `SECTION ${letter}`, rowSpan: group.length }] : [];
+      row.push(`${qNum}.`, q.text ?? '', answerText);
+      body.push(row);
       qNum++;
     });
   });

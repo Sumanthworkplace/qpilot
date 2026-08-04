@@ -54,8 +54,20 @@ export default function QuestionEntry({ onValidChange }: QuestionEntryProps) {
     return slots;
   };
 
-  const questionSlots = getQuestionSlots();
-  const totalQuestions = questionSlots.reduce((sum, slot) => sum + slot.count, 0);
+  // Flatten the per-type slots into one entry per individual question, so indexing
+  // by `addedQuestions` (a running count of questions, not types) actually lines up.
+  const flattenSlots = (slots: Slot[]): Slot[] => {
+    const flat: Slot[] = [];
+    slots.forEach((slot) => {
+      for (let i = 0; i < slot.count; i++) {
+        flat.push(slot);
+      }
+    });
+    return flat;
+  };
+
+  const questionSlots = flattenSlots(getQuestionSlots());
+  const totalQuestions = questionSlots.length;
   const addedQuestions = paper.questions.length;
   const currentSlot = questionSlots[addedQuestions];
 
