@@ -4,6 +4,9 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma/client';
 import { paperSchema } from '@/lib/validations/paperSchema';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 function serializePaper(paper: any) {
   return {
     ...paper,
@@ -32,7 +35,9 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
     });
 
-    return NextResponse.json(papers.map(serializePaper));
+    return NextResponse.json(papers.map(serializePaper), {
+      headers: { 'Cache-Control': 'no-store, must-revalidate' },
+    });
   } catch (error) {
     console.error('Fetch Papers Error:', error);
     return NextResponse.json({ error: 'Failed to fetch papers' }, { status: 500 });
