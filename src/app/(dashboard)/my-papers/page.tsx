@@ -4,15 +4,17 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { saveAs } from 'file-saver';
-import { Download, FileText, Loader2, Plus, Trash2 } from 'lucide-react';
+import { CheckSquare, Download, FileText, Loader2, Plus, Trash2 } from 'lucide-react';
 import { PaperResponse } from '@/types';
+
+type DownloadType = 'question_paper' | 'answer_key';
 
 export default function MyPapersPage() {
   const [papers, setPapers] = useState<PaperResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [downloadingKey, setDownloadingKey] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPapers();
@@ -47,21 +49,25 @@ export default function MyPapersPage() {
     }
   }
 
-  async function handleDownload(paper: PaperResponse) {
-    setDownloadingId(paper.id);
+  async function handleDownload(paper: PaperResponse, type: DownloadType) {
+    const key = `${paper.id}:${type}`;
+    setDownloadingKey(key);
     try {
       const res = await fetch('/api/generate/pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paper, type: 'question_paper' }),
+        body: JSON.stringify({ paper, type }),
       });
       if (!res.ok) throw new Error('Failed to generate PDF');
       const blob = await res.blob();
-      saveAs(blob, `${paper.title || paper.subject}.pdf`);
+      const suffix = type === 'answer_key' ? ' - Answer Key' : '';
+      saveAs(blob, `${paper.title || paper.subject}${suffix}.pdf`);
     } catch (err) {
-      setError('Could not generate the PDF. Try again.');
+      setError(
+        type === 'answer_key' ? 'Could not generate the answer key. Try again.' : 'Could not generate the PDF. Try again.'
+      );
     } finally {
-      setDownloadingId(null);
+      setDownloadingKey(null);
     }
   }
 
@@ -117,60 +123,76 @@ export default function MyPapersPage() {
       ) : (
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <AnimatePresence>
-            {papers.map((paper, i) => (
-              <motion.div
-                key={paper.id}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.96 }}
-                transition={{ duration: 0.3, delay: i * 0.05 }}
-                className="flex flex-col justify-between rounded-lg border border-border bg-card p-5"
-              >
-                <div>
-                  <h3 className="font-display text-base font-semibold">
-                    {paper.title || paper.subject}
-                  </h3>
-                  <p className="mt-1 font-mono text-xs text-muted-foreground">
-                    {paper.subject} &middot; {paper.totalMarks} marks &middot; {paper.questions.length}{' '}
-                    questions
-                  </p>
-                  <p className="mt-3 text-xs text-muted-foreground">
-                    {new Date(paper.createdAt).toLocaleDateString(undefined, {
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric',
-                    })}
-                  </p>
-                </div>
+            {papers.map((paper, i) => {
+              const pdfKey = `${paper.id}:question_paper`;
+              const keyKey = `${paper.id}:answer_key`;
+              return (
+                <motion.div
+                  key={paper.id}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.96 }}
+                  transition={{ duration: 0.3, delay: i * 0.05 }}
+                  className="flex flex-col justify-between rounded-lg border border-border bg-card p-5"
+                >
+                  <div>
+                    <h3 className="font-display text-base font-semibold">
+                      {paper.title || paper.subject}
+                    </h3>
+                    <p className="mt-1 font-mono text-xs text-muted-foreground">
+                      {paper.subject} &middot; {paper.totalMarks} marks &middot; {paper.questions.length}{' '}
+                      questions
+                    </p>
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      {new Date(paper.createdAt).toLocaleDateString(undefined, {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                      })}
+                    </p>
+                  </div>
 
-                <div className="mt-5 flex items-center gap-2">
-                  <button
-                    onClick={() => handleDownload(paper)}
-                    disabled={downloadingId === paper.id}
-                    className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-secondary disabled:opacity-50"
-                  >
-                    {downloadingId === paper.id ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Download className="h-3.5 w-3.5" />
-                    )}
-                    PDF
-                  </button>
-                  <button
-                    onClick={() => handleDelete(paper.id)}
-                    disabled={deletingId === paper.id}
-                    className="inline-flex items-center justify-center rounded-md border border-border p-2 text-destructive hover:bg-destructive/10 disabled:opacity-50"
-                    aria-label="Delete paper"
-                  >
-                    {deletingId === paper.id ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-3.5 w-3.5" />
-                    )}
-                  </button>
-                </div>
-              </motion.div>
-            ))}
+                  <div className="mt-5 flex items-center gap-2">
+                    <button
+                      onClick={() => handleDownload(paper, 'question_paper')}
+                      disabled={downloadingKey === pdfKey}
+                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-secondary disabled:opacity-50"
+                    >
+                      {downloadingKey === pdfKey ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Download className="h-3.5 w-3.5" />
+                      )}
+                      PDF
+                    </button>
+                    <button
+                      onClick={() => handleDownload(paper, 'answer_key')}
+                      disabled={downloadingKey === keyKey}
+                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-secondary disabled:opacity-50"
+                    >
+                      {downloadingKey === keyKey ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <CheckSquare className="h-3.5 w-3.5" />
+                      )}
+                      Answer key
+                    </button>
+                    <button
+                      onClick={() => handleDelete(paper.id)}
+                      disabled={deletingId === paper.id}
+                      className="inline-flex items-center justify-center rounded-md border border-border p-2 text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                      aria-label="Delete paper"
+                    >
+                      {deletingId === paper.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                  </div>
+                </motion.div>
+              );
+            })}
           </AnimatePresence>
         </div>
       )}

@@ -40,7 +40,7 @@ function groupByType(questions: Question[]) {
   return groups;
 }
 
-function questionContent(q: Question, qNum?: number): string {
+function questionContent(q: Question): string {
   let content = q.text ?? '';
 
   if (q.type === 'MCQ' && q.options && Array.isArray(q.options)) {
@@ -51,13 +51,45 @@ function questionContent(q: Question, qNum?: number): string {
     const pairs = q.options as { left: string[]; right: string[] };
     const rows = pairs.left.map((l, i) => `${i + 1}. ${l}    \u2014    ${pairs.right[i] ?? ''}`);
     content += '\n' + rows.join('\n');
-  } else if (q.type === 'IMAGE_BASED') {
-    content += parseDataUrl(q.imageUrl)
-      ? '\n(See image at the end of this paper)'
-      : '\n[Image not available]';
   }
 
   return content;
+}
+
+interface RowImage {
+  buffer: Buffer;
+  format: string;
+  widthMm: number;
+  heightMm: number;
+  textLineCount: number;
+}
+
+function computeImageSizeMm(
+  parsed: { buffer: Buffer; format: string },
+  maxWidthMm: number,
+  maxHeightMm: number
+): { widthMm: number; heightMm: number } | null {
+  let dims;
+  try {
+    dims = imageSize(parsed.buffer);
+  } catch {
+    return null;
+  }
+  if (!dims.width || !dims.height) return null;
+
+  const TARGET_DPI = 200; // sits comfortably within the 150-300 DPI print-legibility range
+  const ratio = dims.height / dims.width;
+
+  let widthMm = (dims.width / TARGET_DPI) * 25.4;
+  widthMm = Math.min(widthMm, maxWidthMm);
+  let heightMm = widthMm * ratio;
+
+  if (heightMm > maxHeightMm) {
+    heightMm = maxHeightMm;
+    widthMm = heightMm / ratio;
+  }
+
+  return { widthMm, heightMm };
 }
 
 function buildInstructions(paper: Paper, groups: Question[][]): string[] {
@@ -77,25 +109,55 @@ function buildInstructions(paper: Paper, groups: Question[][]): string[] {
 }
 
 function buildHeader(doc: jsPDF, paper: Paper, pageWidth: number) {
-  doc.setFontSize(18);
-  doc.setFont('helvetica', 'bold');
-  doc.text((paper.subject ?? 'QUESTION PAPER').toUpperCase(), pageWidth / 2, 20, { align: 'center' });
+  const school = paper.school;
+  let y = 18;
+
+  if (school) {
+    const logo = parseDataUrl(school.logoUrl ?? undefined);
+    let textX = pageWidth / 2;
+    let align: 'center' | 'left' = 'center';
+
+    if (logo) {
+      try {
+        const dims = imageSize(logo.buffer);
+        const logoSize = 16;
+        const ratio = dims.height && dims.width ? dims.height / dims.width : 1;
+        doc.addImage(school.logoUrl!, logo.format, 20, 10, logoSize, logoSize * ratio);
+        textX = pageWidth / 2 + 10;
+      } catch {
+        // If the logo fails to decode, just fall back to text-only header.
+      }
+    }
+
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text(school.name.toUpperCase(), textX, 16, { align });
+
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    doc.text((paper.subject ?? '').toUpperCase(), textX, 24, { align });
+
+    y = 32;
+  } else {
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text((paper.subject ?? 'QUESTION PAPER').toUpperCase(), pageWidth / 2, 20, { align: 'center' });
+    y = 28;
+  }
 
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  doc.text(`Total Marks: ${paper.totalMarks}`, 20, 30);
-  doc.text(`Duration: ${paper.totalHours} hr${paper.totalHours !== 1 ? 's' : ''}`, pageWidth - 20, 30, {
+  doc.text(`Total Marks: ${paper.totalMarks}`, 20, y);
+  doc.text(`Duration: ${paper.totalHours} hr${paper.totalHours !== 1 ? 's' : ''}`, pageWidth - 20, y, {
     align: 'right',
   });
 
+  y += 4;
   doc.setDrawColor(0);
   doc.setLineWidth(0.3);
-  doc.line(20, 34, pageWidth - 20, 34);
+  doc.line(20, y, pageWidth - 20, y);
 
-  doc.text('Roll No: ____________', 20, 42);
-  doc.text('Name: ________________________________', pageWidth - 20, 42, { align: 'right' });
-
-  return 50;
+  return y + 10;
 }
 
 function generateQuestionPaper(paper: Paper): jsPDF {
@@ -123,18 +185,38 @@ function generateQuestionPaper(paper: Paper): jsPDF {
 
   let qNum = 1;
   const body: (string | number | { content: string; rowSpan: number })[][] = [];
-  const imageQuestions: { qNum: number; q: Question }[] = [];
+  const rowImages: Record<number, RowImage> = {};
+
+  const FONT_SIZE = 9;
+  const LINE_HEIGHT_MM = ((FONT_SIZE * 1.15) / 72) * 25.4;
+  const CELL_PADDING_MM = 3;
+  const IMAGE_MAX_WIDTH_MM = 70;
+  const IMAGE_MAX_HEIGHT_MM = 90;
 
   groups.forEach((group, gIdx) => {
     const letter = gIdx < SECTION_LETTERS.length ? SECTION_LETTERS[gIdx] : gIdx + 1;
     group.forEach((q, i) => {
       const row: (string | number | { content: string; rowSpan: number })[] =
         i === 0 ? [{ content: `SECTION ${letter}`, rowSpan: group.length }] : [];
-      row.push(`${qNum}.`, questionContent(q), q.marks);
-      body.push(row);
-      if (q.type === 'IMAGE_BASED' && parseDataUrl(q.imageUrl)) {
-        imageQuestions.push({ qNum, q });
+
+      let content = questionContent(q);
+      const parsed = parseDataUrl(q.imageUrl);
+
+      if (parsed) {
+        const size = computeImageSizeMm(parsed, IMAGE_MAX_WIDTH_MM, IMAGE_MAX_HEIGHT_MM);
+        if (size) {
+          const rowIndex = body.length;
+          const textLineCount = content.split('\n').length;
+          rowImages[rowIndex] = { buffer: parsed.buffer, format: parsed.format, textLineCount, ...size };
+          // Pad the cell with blank lines so autoTable computes a tall enough row
+          // to fit the image beneath the text, then draw it in didDrawCell below.
+          const blankLines = Math.ceil(size.heightMm / LINE_HEIGHT_MM) + 1;
+          content += '\n'.repeat(blankLines);
+        }
       }
+
+      row.push(`${qNum}.`, content, q.marks);
+      body.push(row);
       qNum++;
     });
   });
@@ -153,7 +235,7 @@ function generateQuestionPaper(paper: Paper): jsPDF {
     head: [['Section', '#', 'Question', 'Marks']],
     body,
     theme: 'grid',
-    styles: { fontSize: 9, cellPadding: 3, valign: 'top', lineColor: [0, 0, 0], lineWidth: 0.2 },
+    styles: { fontSize: FONT_SIZE, cellPadding: CELL_PADDING_MM, valign: 'top', lineColor: [0, 0, 0], lineWidth: 0.2 },
     headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold' },
     columnStyles: {
       0: { cellWidth: 22, fontStyle: 'bold', valign: 'middle', halign: 'center' },
@@ -162,53 +244,22 @@ function generateQuestionPaper(paper: Paper): jsPDF {
     },
     margin: { left: 20, right: 20 },
     rowPageBreak: 'avoid',
+    didDrawCell: (data: any) => {
+      if (data.section !== 'body' || data.column.index !== 2) return;
+      const img = rowImages[data.row.index];
+      if (!img) return;
+
+      const textHeightMm = Math.max(img.textLineCount, 1) * LINE_HEIGHT_MM;
+      const imgX = data.cell.x + CELL_PADDING_MM;
+      const imgY = data.cell.y + CELL_PADDING_MM + textHeightMm + 2;
+
+      try {
+        doc.addImage(img.buffer, img.format, imgX, imgY, img.widthMm, img.heightMm);
+      } catch {
+        // If the image fails to draw, the padded blank space is left empty rather than crashing generation.
+      }
+    },
   });
-
-  if (imageQuestions.length > 0) {
-    doc.addPage();
-    let imgY = 20;
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Image Reference', pageWidth / 2, imgY, { align: 'center' });
-    imgY += 12;
-
-    const maxWidthMm = pageWidth - 40;
-
-    imageQuestions.forEach(({ qNum: refNum, q }) => {
-      const parsed = parseDataUrl(q.imageUrl);
-      if (!parsed) return;
-
-      let dims;
-      try {
-        dims = imageSize(parsed.buffer);
-      } catch {
-        return;
-      }
-      const ratio = dims.height && dims.width ? dims.height / dims.width : 1;
-      const w = Math.min(maxWidthMm, 100);
-      const h = w * ratio;
-
-      if (imgY + h + 20 > pageHeight - 20) {
-        doc.addPage();
-        imgY = 20;
-      }
-
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`Question ${refNum}`, 20, imgY);
-      imgY += 6;
-
-      try {
-        doc.addImage(q.imageUrl!, parsed.format, 20, imgY, w, h);
-        imgY += h + 12;
-      } catch {
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(9);
-        doc.text('[Could not render image]', 20, imgY);
-        imgY += 10;
-      }
-    });
-  }
 
   const pageCount = doc.internal.pages.length - 1;
   for (let i = 1; i <= pageCount; i++) {

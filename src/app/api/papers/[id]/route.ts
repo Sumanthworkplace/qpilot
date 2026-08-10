@@ -32,7 +32,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
 
     const paper = await prisma.paper.findUnique({
       where: { id: params.id },
-      include: { questions: { orderBy: { order: 'asc' } } },
+      include: { questions: { orderBy: { order: 'asc' } }, school: true },
     });
 
     if (!paper) {
@@ -80,7 +80,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const { title, subject, totalMarks, totalHours, questions, questionSplitup } = parsed.data;
+    const { title, subject, totalMarks, totalHours, questions, questionSplitup, schoolId } = parsed.data;
 
     if (questions) {
       await prisma.question.deleteMany({ where: { paperId: params.id } });
@@ -93,6 +93,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
         ...(subject !== undefined && { subject }),
         ...(totalMarks !== undefined && { totalMarks }),
         ...(totalHours !== undefined && { totalHours }),
+        ...(schoolId !== undefined && { schoolId }),
         ...(questionSplitup !== undefined && {
           questionSplitup: JSON.stringify(questionSplitup),
         }),
@@ -110,7 +111,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
           },
         }),
       },
-      include: { questions: { orderBy: { order: 'asc' } } },
+      include: { questions: { orderBy: { order: 'asc' } }, school: true },
     });
 
     return NextResponse.json(serializePaper(paper));

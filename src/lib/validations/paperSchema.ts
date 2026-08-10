@@ -56,6 +56,7 @@ export const paperSchema = z.object({
   totalHours: z.number().min(0),
   questions: z.array(questionSchema).min(1, 'At least one question is required'),
   questionSplitup: questionSplitupSchema,
+  schoolId: z.string().nullable().optional(),
 });
 
 export const updatePaperSchema = paperSchema.partial();

@@ -31,7 +31,7 @@ export async function GET() {
 
     const papers = await prisma.paper.findMany({
       where: { userId },
-      include: { questions: { orderBy: { order: 'asc' } } },
+      include: { questions: { orderBy: { order: 'asc' } }, school: true },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { title, subject, totalMarks, totalHours, questions, questionSplitup } = parsed.data;
+    const { title, subject, totalMarks, totalHours, questions, questionSplitup, schoolId } = parsed.data;
 
     const paper = await prisma.paper.create({
       data: {
@@ -73,6 +73,7 @@ export async function POST(req: NextRequest) {
         totalMarks,
         totalHours,
         userId: userId as string,
+        schoolId: schoolId ?? null,
         questionSplitup: JSON.stringify(questionSplitup),
         questions: {
           create: questions.map((q, index) => ({
@@ -86,7 +87,7 @@ export async function POST(req: NextRequest) {
           })),
         },
       },
-      include: { questions: { orderBy: { order: 'asc' } } },
+      include: { questions: { orderBy: { order: 'asc' } }, school: true },
     });
 
     return NextResponse.json(serializePaper(paper), { status: 201 });

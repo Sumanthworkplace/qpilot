@@ -20,6 +20,12 @@ export interface Question {
   imageUrl?: string;
 }
 
+export interface School {
+  id: string;
+  name: string;
+  logoUrl?: string | null;
+}
+
 export interface Paper {
   id?: string;
   title?: string;
@@ -28,6 +34,8 @@ export interface Paper {
   totalHours: number;
   questions: Question[];
   questionSplitup: QuestionSplitup;
+  schoolId?: string | null;
+  school?: School | null;
 }
 
 export type QuestionType =
@@ -48,6 +56,8 @@ export interface PaperResponse {
   totalHours: number;
   questions: Question[];
   questionSplitup: QuestionSplitup;
+  schoolId?: string | null;
+  school?: School | null;
   createdAt: string;
   updatedAt: string;
 }

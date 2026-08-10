@@ -107,28 +107,36 @@ function questionParagraphs(q: Question): Paragraph[] {
         })
       );
     });
-  } else if (q.type === 'IMAGE_BASED') {
-    const parsed = parseDataUrl(q.imageUrl);
-    if (parsed) {
-      try {
-        const dims = imageSize(parsed.buffer);
-        const maxWidth = 300;
-        const ratio = dims.height && dims.width ? dims.height / dims.width : 1;
+  }
+
+  const parsed = parseDataUrl(q.imageUrl);
+  if (parsed) {
+    try {
+      const dims = imageSize(parsed.buffer);
+      if (dims.width && dims.height) {
+        // docx's transformation width/height are px assuming 96 DPI internally.
+        // Sizing from native pixels at a target print DPI keeps images legible
+        // (150-300 DPI range) instead of stretching them to a fixed display size.
+        const TARGET_DPI = 200;
+        const MAX_WIDTH_PX_AT_96DPI = 570; // roughly 150mm cap
+        const ratio = dims.height / dims.width;
+        let width = dims.width * (96 / TARGET_DPI);
+        width = Math.min(width, MAX_WIDTH_PX_AT_96DPI);
+        const height = Math.round(width * ratio);
+
         paras.push(
           new Paragraph({
             children: [
               new ImageRun({
                 data: parsed.buffer,
-                transformation: { width: maxWidth, height: Math.round(maxWidth * ratio) },
+                transformation: { width: Math.round(width), height },
               }),
             ],
           })
         );
-      } catch {
-        paras.push(new Paragraph({ children: [new TextRun({ text: '[Could not render image]', italics: true })] }));
       }
-    } else {
-      paras.push(new Paragraph({ children: [new TextRun({ text: '[No image attached]', italics: true })] }));
+    } catch {
+      paras.push(new Paragraph({ children: [new TextRun({ text: '[Could not render image]', italics: true })] }));
     }
   }
 
@@ -257,12 +265,53 @@ function buildInstructions(paper: Paper, groups: Question[][]): Paragraph[] {
 
 function buildDocument(paper: Paper, isAnswerKey: boolean): Document {
   const groups = groupByType(paper.questions ?? []);
+  const school = paper.school;
 
-  const headerParagraphs = [
-    new Paragraph({
-      alignment: AlignmentType.CENTER,
-      children: [new TextRun({ text: (paper.subject ?? 'QUESTION PAPER').toUpperCase(), bold: true, size: 32 })],
-    }),
+  const headerParagraphs: Paragraph[] = [];
+
+  if (school) {
+    const logo = parseDataUrl(school.logoUrl ?? undefined);
+    if (logo) {
+      try {
+        const dims = imageSize(logo.buffer);
+        const logoWidth = 60;
+        const ratio = dims.height && dims.width ? dims.height / dims.width : 1;
+        headerParagraphs.push(
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            children: [
+              new ImageRun({
+                data: logo.buffer,
+                transformation: { width: logoWidth, height: Math.round(logoWidth * ratio) },
+              }),
+            ],
+          })
+        );
+      } catch {
+        // If the logo fails to decode, just fall back to text-only header.
+      }
+    }
+    headerParagraphs.push(
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [new TextRun({ text: school.name.toUpperCase(), bold: true, size: 28 })],
+      }),
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 200 },
+        children: [new TextRun({ text: (paper.subject ?? '').toUpperCase(), bold: true, size: 22 })],
+      })
+    );
+  } else {
+    headerParagraphs.push(
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [new TextRun({ text: (paper.subject ?? 'QUESTION PAPER').toUpperCase(), bold: true, size: 32 })],
+      })
+    );
+  }
+
+  headerParagraphs.push(
     new Paragraph({
       spacing: { after: 100 },
       children: [new TextRun({ text: `Total Marks: ${paper.totalMarks}` })],
@@ -272,8 +321,8 @@ function buildDocument(paper: Paper, isAnswerKey: boolean): Document {
       children: [
         new TextRun({ text: `Duration: ${paper.totalHours} hr${paper.totalHours !== 1 ? 's' : ''}` }),
       ],
-    }),
-  ];
+    })
+  );
 
   if (isAnswerKey) {
     return new Document({
@@ -295,13 +344,6 @@ function buildDocument(paper: Paper, isAnswerKey: boolean): Document {
         properties: {},
         children: [
           ...headerParagraphs,
-          new Paragraph({
-            children: [new TextRun({ text: 'Roll No: ____________' })],
-          }),
-          new Paragraph({
-            spacing: { after: 200 },
-            children: [new TextRun({ text: 'Name: ________________________________' })],
-          }),
           ...buildInstructions(paper, groups),
           buildQuestionTable(groups, 'Marks', false),
         ],

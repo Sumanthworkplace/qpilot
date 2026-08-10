@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Question, QuestionType, QuestionSplitup } from '@/types';
-import { CheckCircle2, ImageIcon, Plus, Trash2, Upload } from 'lucide-react';
+import { CheckCircle2, ImageIcon, Plus, Trash2, Upload, X } from 'lucide-react';
 
 interface QuestionEntryProps {
   onValidChange: (valid: boolean) => void;
@@ -15,7 +15,6 @@ interface QuestionEntryProps {
 
 // The splitup object uses camelCase keys, but the actual QuestionType enum
 // used everywhere else (DB, PDF/DOCX generation) is UPPER_SNAKE_CASE.
-// This mapping is the fix for questions silently getting the wrong type.
 const SPLITUP_KEY_TO_TYPE: Record<keyof QuestionSplitup, QuestionType> = {
   mcq: 'MCQ',
   fillInBlanks: 'FILL_IN_BLANKS',
@@ -27,6 +26,10 @@ const SPLITUP_KEY_TO_TYPE: Record<keyof QuestionSplitup, QuestionType> = {
   imageBased: 'IMAGE_BASED',
 };
 
+// A print-legible image at 150mm wide needs roughly this many pixels
+// to stay within the 150-300 DPI range once printed.
+const MIN_RECOMMENDED_WIDTH_PX = 900;
+
 interface Slot {
   type: QuestionType;
   marksPerQuestion: number;
@@ -37,6 +40,7 @@ export default function QuestionEntry({ onValidChange }: QuestionEntryProps) {
   const { paper, addQuestion, removeQuestion } = usePaperStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [imageError, setImageError] = useState('');
+  const [imageWarning, setImageWarning] = useState('');
 
   const getQuestionSlots = (): Slot[] => {
     const slots: Slot[] = [];
@@ -54,8 +58,6 @@ export default function QuestionEntry({ onValidChange }: QuestionEntryProps) {
     return slots;
   };
 
-  // Flatten the per-type slots into one entry per individual question, so indexing
-  // by `addedQuestions` (a running count of questions, not types) actually lines up.
   const flattenSlots = (slots: Slot[]): Slot[] => {
     const flat: Slot[] = [];
     slots.forEach((slot) => {
@@ -82,18 +84,14 @@ export default function QuestionEntry({ onValidChange }: QuestionEntryProps) {
 
   const [currentQuestion, setCurrentQuestion] = useState<Partial<Question>>(blankQuestion(currentSlot));
 
-  // Keep the form's type/marks in sync with whichever slot we're currently filling.
   useEffect(() => {
     setCurrentQuestion(blankQuestion(currentSlot));
     setImageError('');
+    setImageWarning('');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addedQuestions]);
 
-  const isImageType = currentQuestion.type === 'IMAGE_BASED';
-
-  const canSubmit =
-    !!currentQuestion.text &&
-    (isImageType ? !!currentQuestion.imageUrl : !!currentQuestion.answer);
+  const canSubmit = !!currentQuestion.text && !!currentQuestion.answer;
 
   const handleAddQuestion = () => {
     if (!canSubmit) return;
@@ -118,6 +116,7 @@ export default function QuestionEntry({ onValidChange }: QuestionEntryProps) {
 
   const handleImageFile = (file: File) => {
     setImageError('');
+    setImageWarning('');
 
     if (!file.type.startsWith('image/')) {
       setImageError('Please choose an image file.');
@@ -130,7 +129,20 @@ export default function QuestionEntry({ onValidChange }: QuestionEntryProps) {
 
     const reader = new FileReader();
     reader.onload = () => {
-      setCurrentQuestion((prev) => ({ ...prev, imageUrl: reader.result as string }));
+      const dataUrl = reader.result as string;
+
+      // Check native resolution so we can warn if it'll look blurry printed.
+      const img = new Image();
+      img.onload = () => {
+        if (img.naturalWidth < MIN_RECOMMENDED_WIDTH_PX) {
+          setImageWarning(
+            `This image is ${img.naturalWidth}\u00d7${img.naturalHeight}px \u2014 it may look blurry when printed. For best results, use an image at least ${MIN_RECOMMENDED_WIDTH_PX}px wide.`
+          );
+        }
+      };
+      img.src = dataUrl;
+
+      setCurrentQuestion((prev) => ({ ...prev, imageUrl: dataUrl }));
     };
     reader.onerror = () => setImageError('Could not read that file. Try again.');
     reader.readAsDataURL(file);
@@ -140,6 +152,67 @@ export default function QuestionEntry({ onValidChange }: QuestionEntryProps) {
     const allAdded = addedQuestions >= totalQuestions;
     onValidChange(allAdded && addedQuestions > 0);
   }, [addedQuestions, totalQuestions, onValidChange]);
+
+  const renderImageAttachment = () => (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label className="flex items-center gap-1.5">
+          <ImageIcon className="h-3.5 w-3.5" />
+          Attach image (optional)
+        </Label>
+      </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleImageFile(file);
+        }}
+      />
+      {currentQuestion.imageUrl ? (
+        <div className="flex items-start gap-3">
+          <img
+            src={currentQuestion.imageUrl}
+            alt="Question"
+            className="max-h-40 rounded-md border border-border object-contain"
+          />
+          <div className="flex flex-col gap-1">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="text-sm font-medium text-primary hover:underline"
+            >
+              Replace
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setCurrentQuestion((prev) => ({ ...prev, imageUrl: undefined }));
+                setImageWarning('');
+              }}
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-destructive"
+            >
+              <X className="h-3.5 w-3.5" />
+              Remove
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border py-4 text-sm text-muted-foreground hover:border-primary hover:text-primary"
+        >
+          <Upload className="h-4 w-4" />
+          {'Click to upload (max 4MB, 150\u2013300 DPI recommended)'}
+        </button>
+      )}
+      {imageError && <p className="text-sm text-destructive">{imageError}</p>}
+      {imageWarning && <p className="text-sm text-accent">{imageWarning}</p>}
+    </div>
+  );
 
   const renderQuestionFields = () => {
     const type = currentQuestion.type || 'MCQ';
@@ -178,126 +251,83 @@ export default function QuestionEntry({ onValidChange }: QuestionEntryProps) {
                 )}
               </select>
             </div>
+            {renderImageAttachment()}
           </div>
         );
 
       case 'TRUE_FALSE':
         return (
-          <div>
-            <Label>Correct answer</Label>
-            <select
-              className="mt-1.5 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-              value={(currentQuestion.answer as string) || ''}
-              onChange={(e) => setCurrentQuestion({ ...currentQuestion, answer: e.target.value })}
-            >
-              <option value="">Select answer</option>
-              <option value="True">True</option>
-              <option value="False">False</option>
-            </select>
+          <div className="space-y-4">
+            <div>
+              <Label>Correct answer</Label>
+              <select
+                className="mt-1.5 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                value={(currentQuestion.answer as string) || ''}
+                onChange={(e) => setCurrentQuestion({ ...currentQuestion, answer: e.target.value })}
+              >
+                <option value="">Select answer</option>
+                <option value="True">True</option>
+                <option value="False">False</option>
+              </select>
+            </div>
+            {renderImageAttachment()}
           </div>
         );
 
       case 'MATCH_THE_FOLLOWING':
         return (
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label>Left column</Label>
-              {[0, 1, 2, 3].map((index) => (
-                <Input
-                  key={index}
-                  placeholder={`Item ${index + 1}`}
-                  className="mt-2"
-                  onChange={(e) => {
-                    const currentMatch = (currentQuestion.answer as any) || { left: [], right: [] };
-                    const left = [...(currentMatch.left || [])];
-                    left[index] = e.target.value;
-                    setCurrentQuestion({ ...currentQuestion, answer: { ...currentMatch, left } });
-                  }}
-                />
-              ))}
-            </div>
-            <div>
-              <Label>Right column</Label>
-              {[0, 1, 2, 3].map((index) => (
-                <Input
-                  key={index}
-                  placeholder={`Match ${index + 1}`}
-                  className="mt-2"
-                  onChange={(e) => {
-                    const currentMatch = (currentQuestion.answer as any) || { left: [], right: [] };
-                    const right = [...(currentMatch.right || [])];
-                    right[index] = e.target.value;
-                    setCurrentQuestion({ ...currentQuestion, answer: { ...currentMatch, right } });
-                  }}
-                />
-              ))}
-            </div>
-          </div>
-        );
-
-      case 'IMAGE_BASED':
-        return (
-          <div className="space-y-3">
-            <Label>Image</Label>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleImageFile(file);
-              }}
-            />
-            {currentQuestion.imageUrl ? (
-              <div className="space-y-2">
-                <img
-                  src={currentQuestion.imageUrl}
-                  alt="Question"
-                  className="max-h-56 rounded-md border border-border object-contain"
-                />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="text-sm font-medium text-primary hover:underline"
-                >
-                  Replace image
-                </button>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Left column</Label>
+                {[0, 1, 2, 3].map((index) => (
+                  <Input
+                    key={index}
+                    placeholder={`Item ${index + 1}`}
+                    className="mt-2"
+                    onChange={(e) => {
+                      const currentMatch = (currentQuestion.answer as any) || { left: [], right: [] };
+                      const left = [...(currentMatch.left || [])];
+                      left[index] = e.target.value;
+                      setCurrentQuestion({ ...currentQuestion, answer: { ...currentMatch, left } });
+                    }}
+                  />
+                ))}
               </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="flex w-full flex-col items-center gap-2 rounded-lg border border-dashed border-border py-8 text-muted-foreground hover:border-primary hover:text-primary"
-              >
-                <Upload className="h-6 w-6" />
-                <span className="text-sm">Click to upload an image (max 4MB)</span>
-              </button>
-            )}
-            {imageError && <p className="text-sm text-destructive">{imageError}</p>}
-
-            <div>
-              <Label>Answer / explanation (optional)</Label>
-              <Input
-                placeholder={'Optional \u2014 add an answer or grading note'}
-                value={(currentQuestion.answer as string) || ''}
-                onChange={(e) => setCurrentQuestion({ ...currentQuestion, answer: e.target.value })}
-                className="mt-1.5"
-              />
+              <div>
+                <Label>Right column</Label>
+                {[0, 1, 2, 3].map((index) => (
+                  <Input
+                    key={index}
+                    placeholder={`Match ${index + 1}`}
+                    className="mt-2"
+                    onChange={(e) => {
+                      const currentMatch = (currentQuestion.answer as any) || { left: [], right: [] };
+                      const right = [...(currentMatch.right || [])];
+                      right[index] = e.target.value;
+                      setCurrentQuestion({ ...currentQuestion, answer: { ...currentMatch, right } });
+                    }}
+                  />
+                ))}
+              </div>
             </div>
+            {renderImageAttachment()}
           </div>
         );
 
       default:
         return (
-          <div>
-            <Label>Answer key</Label>
-            <Input
-              placeholder="Enter answer"
-              value={(currentQuestion.answer as string) || ''}
-              onChange={(e) => setCurrentQuestion({ ...currentQuestion, answer: e.target.value })}
-              className="mt-1.5"
-            />
+          <div className="space-y-4">
+            <div>
+              <Label>Answer key</Label>
+              <Input
+                placeholder="Enter answer"
+                value={(currentQuestion.answer as string) || ''}
+                onChange={(e) => setCurrentQuestion({ ...currentQuestion, answer: e.target.value })}
+                className="mt-1.5"
+              />
+            </div>
+            {renderImageAttachment()}
           </div>
         );
     }

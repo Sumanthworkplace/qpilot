@@ -1,11 +1,12 @@
 import { create } from 'zustand';
-import { Paper, Question, QuestionSplitup } from '@/types';
+import { Paper, Question, QuestionSplitup, School } from '@/types';
 
 interface PaperStore {
   paper: Paper;
   currentStep: number;
   isLoading: boolean;
   setBasicDetails: (subject: string, totalMarks: number, totalHours: number) => void;
+  setSchool: (school: School | null) => void;
   setQuestionSplitup: (splitup: QuestionSplitup) => void;
   addQuestion: (question: Question) => void;
   updateQuestion: (index: number, question: Question) => void;
@@ -33,23 +34,30 @@ const initialPaper: Paper = {
   totalHours: 0,
   questions: [],
   questionSplitup: initialSplitup,
+  schoolId: null,
+  school: null,
 };
 
 export const usePaperStore = create<PaperStore>((set, get) => ({
   paper: initialPaper,
   currentStep: 0,
   isLoading: false,
-  
+
   setBasicDetails: (subject, totalMarks, totalHours) =>
     set((state) => ({
       paper: { ...state.paper, subject, totalMarks, totalHours },
     })),
-    
+
+  setSchool: (school) =>
+    set((state) => ({
+      paper: { ...state.paper, school, schoolId: school?.id ?? null },
+    })),
+
   setQuestionSplitup: (splitup) =>
     set((state) => ({
       paper: { ...state.paper, questionSplitup: splitup },
     })),
-    
+
   addQuestion: (question) =>
     set((state) => ({
       paper: {
@@ -57,7 +65,7 @@ export const usePaperStore = create<PaperStore>((set, get) => ({
         questions: [...state.paper.questions, { ...question, order: state.paper.questions.length }],
       },
     })),
-    
+
   updateQuestion: (index, question) =>
     set((state) => ({
       paper: {
@@ -67,7 +75,7 @@ export const usePaperStore = create<PaperStore>((set, get) => ({
         ),
       },
     })),
-    
+
   removeQuestion: (index) =>
     set((state) => ({
       paper: {
@@ -75,12 +83,12 @@ export const usePaperStore = create<PaperStore>((set, get) => ({
         questions: state.paper.questions.filter((_, i) => i !== index),
       },
     })),
-    
+
   resetPaper: () => set({ paper: initialPaper, currentStep: 0 }),
-  
+
   nextStep: () => set((state) => ({ currentStep: state.currentStep + 1 })),
-  
+
   previousStep: () => set((state) => ({ currentStep: state.currentStep - 1 })),
-  
+
   setLoading: (loading) => set({ isLoading: loading }),
 }));
