@@ -28,7 +28,7 @@ const SPLITUP_KEY_TO_TYPE: Record<keyof QuestionSplitup, QuestionType> = {
 
 // A print-legible image at 150mm wide needs roughly this many pixels
 // to stay within the 150-300 DPI range once printed.
-const MIN_RECOMMENDED_WIDTH_PX = 900;
+const MIN_RECOMMENDED_WIDTH_PX = 400;
 
 interface Slot {
   type: QuestionType;
@@ -129,9 +129,8 @@ export default function QuestionEntry({ onValidChange }: QuestionEntryProps) {
 
     const reader = new FileReader();
     reader.onload = () => {
-      const dataUrl = reader.result as string;
+      const rawDataUrl = reader.result as string;
 
-      // Check native resolution so we can warn if it'll look blurry printed.
       const img = new Image();
       img.onload = () => {
         if (img.naturalWidth < MIN_RECOMMENDED_WIDTH_PX) {
@@ -139,10 +138,31 @@ export default function QuestionEntry({ onValidChange }: QuestionEntryProps) {
             `This image is ${img.naturalWidth}\u00d7${img.naturalHeight}px \u2014 it may look blurry when printed. For best results, use an image at least ${MIN_RECOMMENDED_WIDTH_PX}px wide.`
           );
         }
-      };
-      img.src = dataUrl;
 
-      setCurrentQuestion((prev) => ({ ...prev, imageUrl: dataUrl }));
+        // Resize to fit within 400x600px (preserving aspect ratio, never upscaling)
+        // so uploaded images have a consistent, print-appropriate resolution.
+        const MAX_W = 400;
+        const MAX_H = 600;
+        const scale = Math.min(MAX_W / img.naturalWidth, MAX_H / img.naturalHeight, 1);
+        const targetW = Math.round(img.naturalWidth * scale);
+        const targetH = Math.round(img.naturalHeight * scale);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = targetW;
+        canvas.height = targetH;
+        const ctx = canvas.getContext('2d');
+
+        if (!ctx) {
+          // Canvas unavailable for some reason - fall back to the original file.
+          setCurrentQuestion((prev) => ({ ...prev, imageUrl: rawDataUrl }));
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, targetW, targetH);
+        const resizedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        setCurrentQuestion((prev) => ({ ...prev, imageUrl: resizedDataUrl }));
+      };
+      img.src = rawDataUrl;
     };
     reader.onerror = () => setImageError('Could not read that file. Try again.');
     reader.readAsDataURL(file);

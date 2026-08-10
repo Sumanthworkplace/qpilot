@@ -195,9 +195,18 @@ function generateQuestionPaper(paper: Paper): jsPDF {
 
   groups.forEach((group, gIdx) => {
     const letter = gIdx < SECTION_LETTERS.length ? SECTION_LETTERS[gIdx] : gIdx + 1;
+    const groupHasImage = group.some((q) => parseDataUrl(q.imageUrl));
+
     group.forEach((q, i) => {
-      const row: (string | number | { content: string; rowSpan: number })[] =
-        i === 0 ? [{ content: `SECTION ${letter}`, rowSpan: group.length }] : [];
+      // Sections with images skip rowSpan merging: a merged cell forces the whole
+      // group to relocate together if it doesn't fit the remaining page space,
+      // which can shove every question in the section onto a new page even when
+      // only one row was actually too tall. Repeating the label avoids that.
+      const row: (string | number | { content: string; rowSpan: number })[] = groupHasImage
+        ? [`SECTION ${letter}`]
+        : i === 0
+        ? [{ content: `SECTION ${letter}`, rowSpan: group.length }]
+        : [];
 
       let content = questionContent(q);
       const parsed = parseDataUrl(q.imageUrl);
