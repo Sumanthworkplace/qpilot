@@ -36,6 +36,7 @@ export const questionSchema = z.object({
       z.array(z.string()),
       z.object({ left: z.array(z.string()), right: z.array(z.string()) }),
     ])
+    .nullable()
     .optional(),
   answer: z
     .union([
@@ -43,10 +44,11 @@ export const questionSchema = z.object({
       z.array(z.string()),
       z.array(z.object({ left: z.string(), right: z.string() })),
     ])
+    .nullable()
     .optional(),
   marks: z.number().int().min(1),
   order: z.number().int().min(0),
-  imageUrl: z.string().optional(),
+  imageUrl: z.string().nullable().optional(),
 });
 
 export const paperSchema = z.object({

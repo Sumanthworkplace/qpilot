@@ -5,6 +5,7 @@ interface PaperStore {
   paper: Paper;
   currentStep: number;
   isLoading: boolean;
+  editingPaperId: string | null;
   setBasicDetails: (subject: string, totalMarks: number, totalHours: number) => void;
   setSchool: (school: School | null) => void;
   setQuestionSplitup: (splitup: QuestionSplitup) => void;
@@ -12,6 +13,7 @@ interface PaperStore {
   updateQuestion: (index: number, question: Question) => void;
   removeQuestion: (index: number) => void;
   resetPaper: () => void;
+  loadPaperForEdit: (paper: Paper & { id: string }) => void;
   nextStep: () => void;
   previousStep: () => void;
   setLoading: (loading: boolean) => void;
@@ -42,6 +44,7 @@ export const usePaperStore = create<PaperStore>((set, get) => ({
   paper: initialPaper,
   currentStep: 0,
   isLoading: false,
+  editingPaperId: null,
 
   setBasicDetails: (subject, totalMarks, totalHours) =>
     set((state) => ({
@@ -84,7 +87,10 @@ export const usePaperStore = create<PaperStore>((set, get) => ({
       },
     })),
 
-  resetPaper: () => set({ paper: initialPaper, currentStep: 0 }),
+  resetPaper: () => set({ paper: initialPaper, currentStep: 0, editingPaperId: null }),
+
+  loadPaperForEdit: (paper) =>
+    set({ paper, currentStep: 0, editingPaperId: paper.id }),
 
   nextStep: () => set((state) => ({ currentStep: state.currentStep + 1 })),
 

@@ -7,7 +7,7 @@ import { CheckCircle2, Download, FileCheck, FileText, Loader2, Save } from 'luci
 import { usePaperStore } from '@/store/paperStore';
 
 export default function ReviewPaper() {
-  const { paper, isLoading, setLoading } = usePaperStore();
+  const { paper, isLoading, setLoading, editingPaperId, resetPaper } = usePaperStore();
   const [generating, setGenerating] = useState<'question' | 'answer' | null>(null);
   const [error, setError] = useState('');
   const router = useRouter();
@@ -52,13 +52,17 @@ export default function ReviewPaper() {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch('/api/papers', {
-        method: 'POST',
+      const url = editingPaperId ? `/api/papers/${editingPaperId}` : '/api/papers';
+      const method = editingPaperId ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...paper, title: paper.subject }),
+        body: JSON.stringify({ ...paper, title: paper.title || paper.subject }),
       });
 
       if (response.ok) {
+        resetPaper();
         router.push('/my-papers');
       } else {
         const data = await response.json();
@@ -178,7 +182,7 @@ export default function ReviewPaper() {
           ) : (
             <Save className="h-5 w-5" />
           )}
-          Save paper
+          {editingPaperId ? 'Update paper' : 'Save paper'}
         </motion.button>
       </div>
     </div>

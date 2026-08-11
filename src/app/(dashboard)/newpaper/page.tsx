@@ -1,34 +1,83 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { usePaperStore } from '@/store/paperStore';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
+import { motion } from 'framer-motion';
+import { ArrowLeft, ArrowRight, FileText, Loader2 } from 'lucide-react';
 import BasicDetails from './components/BasicDetails';
 import QuestionSplitup from './components/QuestionSplitup';
 import QuestionEntry from './components/QuestionEntry';
 import ReviewPaper from './components/ReviewPaper';
-import { ArrowLeft, ArrowRight, FileText } from 'lucide-react';
 
 const steps = [
-  { id: 0, title: 'Basic Details', icon: '📝' },
-  { id: 1, title: 'Question Split-up', icon: '📊' },
-  { id: 2, title: 'Enter Questions', icon: '✍️' },
-  { id: 3, title: 'Review & Generate', icon: '✅' },
+  { id: 0, title: 'Basic Details' },
+  { id: 1, title: 'Question Split-up' },
+  { id: 2, title: 'Enter Questions' },
+  { id: 3, title: 'Review & Generate' },
 ];
 
-export default function NewPaperPage() {
-  const { currentStep, nextStep, previousStep } = usePaperStore();
+function NewPaperContent() {
+  const { currentStep, nextStep, previousStep, resetPaper, loadPaperForEdit, editingPaperId } =
+    usePaperStore();
   const [isValid, setIsValid] = useState(false);
   const [isClient, setIsClient] = useState(false);
+  const [loadingPaper, setLoadingPaper] = useState(false);
+  const [loadError, setLoadError] = useState('');
+
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const editId = searchParams.get('edit');
 
   useEffect(() => {
     setIsClient(true);
-  }, []);
+
+    if (editId) {
+      setLoadingPaper(true);
+      setLoadError('');
+      fetch(`/api/papers/${editId}`, { cache: 'no-store' })
+        .then((res) => {
+          if (!res.ok) throw new Error('Could not load that paper.');
+          return res.json();
+        })
+        .then((paper) => {
+          loadPaperForEdit(paper);
+        })
+        .catch(() => {
+          setLoadError('Could not load that paper. It may have been deleted.');
+        })
+        .finally(() => setLoadingPaper(false));
+    } else {
+      resetPaper();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId]);
 
   if (!isClient) {
     return null;
+  }
+
+  if (loadingPaper) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 text-muted-foreground">
+        <Loader2 className="h-6 w-6 animate-spin" />
+        <p className="font-mono text-sm">{'Loading paper\u2026'}</p>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="mx-auto max-w-lg py-16 text-center">
+        <p className="text-sm text-destructive">{loadError}</p>
+        <button
+          onClick={() => router.push('/my-papers')}
+          className="mt-4 text-sm font-medium text-primary hover:underline"
+        >
+          Back to My Papers
+        </button>
+      </div>
+    );
   }
 
   const renderStep = () => {
@@ -47,70 +96,83 @@ export default function NewPaperPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white py-8">
-      <div className="container mx-auto px-4 max-w-5xl">
-        <div className="mb-8">
-          <div className="flex items-center gap-2 mb-2">
-            <FileText className="h-8 w-8 text-blue-600" />
-            <h1 className="text-3xl font-bold text-gray-900">Create New Question Paper</h1>
-          </div>
-          <p className="text-gray-600">
-            Step {currentStep + 1} of {steps.length}: {steps[currentStep].title}
-          </p>
+    <div className="mx-auto max-w-4xl">
+      <div className="mb-8">
+        <div className="mb-2 flex items-center gap-2">
+          <FileText className="h-6 w-6 text-primary" />
+          <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
+            {editingPaperId ? 'Edit Question Paper' : 'Create New Question Paper'}
+          </h1>
         </div>
+        <p className="text-sm text-muted-foreground">
+          Step {currentStep + 1} of {steps.length}: {steps[currentStep].title}
+        </p>
+      </div>
 
-        {/* Progress Bar */}
-        <div className="mb-8">
-          <div className="flex justify-between mb-2">
-            {steps.map((step, index) => (
-              <div key={index} className="flex flex-col items-center">
-                <div className={`text-2xl ${index <= currentStep ? 'opacity-100' : 'opacity-50'}`}>
-                  {step.icon}
-                </div>
-                <span className={`text-xs mt-1 ${index <= currentStep ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>
-                  {step.title}
-                </span>
-              </div>
-            ))}
-          </div>
-          <Progress 
-            value={(currentStep / (steps.length - 1)) * 100} 
-            className="h-2"
+      <div className="mb-8">
+        <div className="mb-2 flex justify-between">
+          {steps.map((step, index) => (
+            <div key={index} className="flex flex-col items-center">
+              <span
+                className={`flex h-7 w-7 items-center justify-center rounded-full font-mono text-xs font-semibold ${
+                  index <= currentStep
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-secondary text-muted-foreground'
+                }`}
+              >
+                {index + 1}
+              </span>
+              <span
+                className={`mt-1 text-xs ${
+                  index <= currentStep ? 'font-medium text-primary' : 'text-muted-foreground'
+                }`}
+              >
+                {step.title}
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+          <motion.div
+            className="h-full rounded-full bg-primary"
+            animate={{ width: `${(currentStep / (steps.length - 1)) * 100}%` }}
+            transition={{ duration: 0.3 }}
           />
         </div>
+      </div>
 
-        <Card className="shadow-lg border-0">
-          <CardContent className="pt-6">
-            <div className="min-h-[400px]">
-              {renderStep()}
-            </div>
-          </CardContent>
-        </Card>
+      <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
+        <div className="min-h-[400px]">{renderStep()}</div>
+      </div>
 
-        {/* Navigation */}
-        <div className="flex justify-between mt-6">
-          <Button
-            variant="outline"
-            onClick={previousStep}
-            disabled={currentStep === 0}
-            className="gap-2"
+      <div className="mt-6 flex justify-between">
+        <button
+          onClick={previousStep}
+          disabled={currentStep === 0}
+          className="flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium disabled:opacity-40"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Previous
+        </button>
+        {currentStep < steps.length - 1 && (
+          <button
+            onClick={nextStep}
+            disabled={!isValid}
+            className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
           >
-            <ArrowLeft className="h-4 w-4" />
-            Previous
-          </Button>
-          
-          {currentStep < steps.length - 1 && (
-            <Button
-              onClick={nextStep}
-              disabled={!isValid}
-              className="gap-2 bg-blue-600 hover:bg-blue-700"
-            >
-              Next
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
+            Next
+            <ArrowRight className="h-4 w-4" />
+          </button>
+        )}
       </div>
     </div>
+  );
+}
+
+export default function NewPaperPage() {
+  return (
+    <Suspense fallback={null}>
+      <NewPaperContent />
+    </Suspense>
   );
 }

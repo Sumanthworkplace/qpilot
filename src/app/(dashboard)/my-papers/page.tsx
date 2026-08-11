@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { saveAs } from 'file-saver';
-import { CheckSquare, Download, FileText, Loader2, Plus, Trash2 } from 'lucide-react';
+import { CheckSquare, Download, FileText, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { PaperResponse } from '@/types';
 
 type DownloadType = 'question_paper' | 'answer_key';
@@ -152,43 +152,54 @@ export default function MyPapersPage() {
                     </p>
                   </div>
 
-                  <div className="mt-5 flex items-center gap-2">
-                    <button
-                      onClick={() => handleDownload(paper, 'question_paper')}
-                      disabled={downloadingKey === pdfKey}
-                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-secondary disabled:opacity-50"
-                    >
-                      {downloadingKey === pdfKey ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Download className="h-3.5 w-3.5" />
-                      )}
-                      PDF
-                    </button>
-                    <button
-                      onClick={() => handleDownload(paper, 'answer_key')}
-                      disabled={downloadingKey === keyKey}
-                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-secondary disabled:opacity-50"
-                    >
-                      {downloadingKey === keyKey ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <CheckSquare className="h-3.5 w-3.5" />
-                      )}
-                      Answer key
-                    </button>
-                    <button
-                      onClick={() => handleDelete(paper.id)}
-                      disabled={deletingId === paper.id}
-                      className="inline-flex items-center justify-center rounded-md border border-border p-2 text-destructive hover:bg-destructive/10 disabled:opacity-50"
-                      aria-label="Delete paper"
-                    >
-                      {deletingId === paper.id ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-3.5 w-3.5" />
-                      )}
-                    </button>
+                  <div className="mt-5 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleDownload(paper, 'question_paper')}
+                        disabled={downloadingKey === pdfKey}
+                        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-secondary disabled:opacity-50"
+                      >
+                        {downloadingKey === pdfKey ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Download className="h-3.5 w-3.5" />
+                        )}
+                        PDF
+                      </button>
+                      <button
+                        onClick={() => handleDownload(paper, 'answer_key')}
+                        disabled={downloadingKey === keyKey}
+                        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-secondary disabled:opacity-50"
+                      >
+                        {downloadingKey === keyKey ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <CheckSquare className="h-3.5 w-3.5" />
+                        )}
+                        Answer key
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Link
+                        href={`/newpaper?edit=${paper.id}`}
+                        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-secondary"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        Edit
+                      </Link>
+                      <button
+                        onClick={() => handleDelete(paper.id)}
+                        disabled={deletingId === paper.id}
+                        className="inline-flex items-center justify-center rounded-md border border-border p-2 text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                        aria-label="Delete paper"
+                      >
+                        {deletingId === paper.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-3.5 w-3.5" />
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </motion.div>
               );
