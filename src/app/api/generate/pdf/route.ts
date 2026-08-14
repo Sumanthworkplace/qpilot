@@ -17,6 +17,15 @@ const TYPE_ORDER: QuestionType[] = [
   'IMAGE_BASED',
 ];
 
+function formatDuration(totalHours: number): string {
+  const hours = Math.floor(totalHours);
+  const minutes = Math.round((totalHours - hours) * 60);
+  const parts: string[] = [];
+  if (hours > 0) parts.push(`${hours} hr`);
+  if (minutes > 0) parts.push(`${minutes} min`);
+  return parts.length > 0 ? parts.join(' ') : '0 min';
+}
+
 function parseDataUrl(dataUrl?: string): { format: string; buffer: Buffer } | null {
   if (!dataUrl) return null;
   const match = dataUrl.match(/^data:image\/(\w+);base64,(.+)$/);
@@ -148,7 +157,7 @@ function buildHeader(doc: jsPDF, paper: Paper, pageWidth: number) {
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
   doc.text(`Total Marks: ${paper.totalMarks}`, 20, y);
-  doc.text(`Duration: ${paper.totalHours} hr${paper.totalHours !== 1 ? 's' : ''}`, pageWidth - 20, y, {
+  doc.text(`Duration: ${formatDuration(paper.totalHours)}`, pageWidth - 20, y, {
     align: 'right',
   });
 

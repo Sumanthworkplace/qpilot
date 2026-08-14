@@ -30,6 +30,15 @@ const TYPE_ORDER: QuestionType[] = [
   'IMAGE_BASED',
 ];
 
+function formatDuration(totalHours: number): string {
+  const hours = Math.floor(totalHours);
+  const minutes = Math.round((totalHours - hours) * 60);
+  const parts: string[] = [];
+  if (hours > 0) parts.push(`${hours} hr`);
+  if (minutes > 0) parts.push(`${minutes} min`);
+  return parts.length > 0 ? parts.join(' ') : '0 min';
+}
+
 function parseDataUrl(dataUrl?: string): { buffer: Buffer; format: 'jpg' | 'png' | 'gif' | 'bmp' } | null {
   if (!dataUrl) return null;
   const match = dataUrl.match(/^data:image\/(\w+);base64,(.+)$/);
@@ -318,9 +327,7 @@ function buildDocument(paper: Paper, isAnswerKey: boolean): Document {
     }),
     new Paragraph({
       spacing: { after: 200 },
-      children: [
-        new TextRun({ text: `Duration: ${paper.totalHours} hr${paper.totalHours !== 1 ? 's' : ''}` }),
-      ],
+      children: [new TextRun({ text: `Duration: ${formatDuration(paper.totalHours)}` })],
     })
   );
 

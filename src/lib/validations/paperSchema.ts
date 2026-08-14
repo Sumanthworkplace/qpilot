@@ -46,7 +46,7 @@ export const questionSchema = z.object({
     ])
     .nullable()
     .optional(),
-  marks: z.number().int().min(1),
+  marks: z.number().min(0.5, 'Marks must be at least 0.5'),
   order: z.number().int().min(0),
   imageUrl: z.string().nullable().optional(),
 });
@@ -54,7 +54,7 @@ export const questionSchema = z.object({
 export const paperSchema = z.object({
   title: z.string().min(1).optional(),
   subject: z.string().min(1, 'Subject is required'),
-  totalMarks: z.number().int().min(1),
+  totalMarks: z.number().min(0.5, 'Total marks must be at least 0.5'),
   totalHours: z.number().min(0),
   questions: z.array(questionSchema).min(1, 'At least one question is required'),
   questionSplitup: questionSplitupSchema,

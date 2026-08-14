@@ -10,24 +10,27 @@ export class MarkCalculator {
       shortAnswer: splitup.shortAnswer.count * splitup.shortAnswer.marksPerQuestion,
       descriptive: splitup.descriptive.count * splitup.descriptive.marksPerQuestion,
       detailed: splitup.detailed.count * splitup.detailed.marksPerQuestion,
+      imageBased: splitup.imageBased.count * splitup.imageBased.marksPerQuestion,
     };
-    
-    return Object.values(totals).reduce((sum, val) => sum + val, 0);
+    const total = Object.values(totals).reduce((sum, val) => sum + val, 0);
+    // Round to 2 decimal places to avoid floating-point artifacts (e.g. 2.1 + 2.4 = 4.4999...)
+    return Math.round(total * 100) / 100;
   }
-  
-  static validateMarks(splitup: QuestionSplitup, totalMarks: number): { 
-    isValid: boolean; 
-    calculatedTotal: number; 
+
+  static validateMarks(splitup: QuestionSplitup, totalMarks: number): {
+    isValid: boolean;
+    calculatedTotal: number;
     difference: number;
   } {
     const calculatedTotal = this.calculateTotalFromSplitup(splitup);
+    const difference = Math.round((totalMarks - calculatedTotal) * 100) / 100;
     return {
-      isValid: calculatedTotal === totalMarks,
+      isValid: Math.abs(difference) < 0.01,
       calculatedTotal,
-      difference: totalMarks - calculatedTotal,
+      difference,
     };
   }
-  
+
   static getMarksBreakdown(splitup: QuestionSplitup): Record<string, number> {
     const breakdown: Record<string, number> = {};
     const types = {
@@ -38,17 +41,16 @@ export class MarkCalculator {
       'Short Answers': splitup.shortAnswer,
       'Descriptive': splitup.descriptive,
       'Detailed': splitup.detailed,
+      'Image Based': splitup.imageBased,
     };
-    
     Object.entries(types).forEach(([name, data]) => {
       if (data.count > 0) {
-        breakdown[name] = data.count * data.marksPerQuestion;
+        breakdown[name] = Math.round(data.count * data.marksPerQuestion * 100) / 100;
       }
     });
-    
     return breakdown;
   }
-  
+
   static getTotalQuestions(splitup: QuestionSplitup): number {
     return Object.values(splitup).reduce((sum, val) => sum + val.count, 0);
   }

@@ -37,7 +37,9 @@ export default function QuestionSplitup({ onValidChange }: QuestionSplitupProps)
     field: 'count' | 'marksPerQuestion',
     value: string
   ) => {
-    const numValue = parseInt(value) || 0;
+    // Count must be a whole number of questions, but marks per question
+    // can be fractional (e.g. 2.5) - parseInt would silently truncate that.
+    const numValue = field === 'count' ? parseInt(value) || 0 : parseFloat(value) || 0;
     setSplitup((prev) => ({
       ...prev,
       [type]: {
@@ -64,8 +66,9 @@ export default function QuestionSplitup({ onValidChange }: QuestionSplitupProps)
         <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
         <p className="text-sm">
           Set the number of questions and marks for each question type. The total marks should
-          equal <strong>{totalMarks}</strong>. Any question can optionally include an image \u2014
-          you&apos;ll get that option while adding questions.
+          equal <strong>{totalMarks}</strong>. Marks per question can include decimals (e.g. 2.5).
+          Any question can optionally include an image \u2014 you&apos;ll get that option while
+          adding questions.
         </p>
       </div>
 
@@ -108,6 +111,7 @@ export default function QuestionSplitup({ onValidChange }: QuestionSplitupProps)
                   <Input
                     type="number"
                     min="0"
+                    step="1"
                     value={data.count || ''}
                     onChange={(e) => handleChange(type.id, 'count', e.target.value)}
                     className="mt-1"
@@ -127,7 +131,7 @@ export default function QuestionSplitup({ onValidChange }: QuestionSplitupProps)
               </div>
               {data.count > 0 && data.marksPerQuestion > 0 && (
                 <p className="mt-2 font-mono text-xs text-muted-foreground">
-                  {data.count} {'\u00d7'} {data.marksPerQuestion} = {data.count * data.marksPerQuestion} marks
+                  {data.count} {'\u00d7'} {data.marksPerQuestion} = {Math.round(data.count * data.marksPerQuestion * 100) / 100} marks
                 </p>
               )}
             </div>

@@ -33,7 +33,7 @@ model Paper {
   id               String      @id @default(cuid())
   title            String
   subject          String
-  totalMarks       Int
+  totalMarks       Float
   totalHours       Float
   userId           String
   user             User        @relation(fields: [userId], references: [id])
@@ -53,7 +53,7 @@ model Question {
   text         String
   options      String?
   answer       String
-  marks        Int
+  marks        Float
   order        Int
   imageUrl     String?
   createdAt    DateTime    @default(now())
