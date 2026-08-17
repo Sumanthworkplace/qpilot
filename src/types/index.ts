@@ -30,6 +30,8 @@ export interface Paper {
   id?: string;
   title?: string;
   subject: string;
+  className?: string;
+  section?: string;
   totalMarks: number;
   totalHours: number;
   questions: Question[];
@@ -52,6 +54,8 @@ export interface PaperResponse {
   id: string;
   title?: string;
   subject: string;
+  className?: string;
+  section?: string;
   totalMarks: number;
   totalHours: number;
   questions: Question[];

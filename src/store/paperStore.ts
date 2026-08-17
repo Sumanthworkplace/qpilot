@@ -6,7 +6,13 @@ interface PaperStore {
   currentStep: number;
   isLoading: boolean;
   editingPaperId: string | null;
-  setBasicDetails: (subject: string, totalMarks: number, totalHours: number) => void;
+  setBasicDetails: (
+    subject: string,
+    totalMarks: number,
+    totalHours: number,
+    className?: string,
+    section?: string
+  ) => void;
   setSchool: (school: School | null) => void;
   setQuestionSplitup: (splitup: QuestionSplitup) => void;
   addQuestion: (question: Question) => void;
@@ -32,6 +38,8 @@ const initialSplitup: QuestionSplitup = {
 
 const initialPaper: Paper = {
   subject: '',
+  className: '',
+  section: '',
   totalMarks: 0,
   totalHours: 0,
   questions: [],
@@ -46,9 +54,9 @@ export const usePaperStore = create<PaperStore>((set, get) => ({
   isLoading: false,
   editingPaperId: null,
 
-  setBasicDetails: (subject, totalMarks, totalHours) =>
+  setBasicDetails: (subject, totalMarks, totalHours, className, section) =>
     set((state) => ({
-      paper: { ...state.paper, subject, totalMarks, totalHours },
+      paper: { ...state.paper, subject, totalMarks, totalHours, className, section },
     })),
 
   setSchool: (school) =>

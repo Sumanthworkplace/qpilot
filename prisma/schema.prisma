@@ -33,6 +33,8 @@ model Paper {
   id               String      @id @default(cuid())
   title            String
   subject          String
+  className        String?
+  section          String?
   totalMarks       Float
   totalHours       Float
   userId           String

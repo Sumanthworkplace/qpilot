@@ -326,10 +326,25 @@ function buildDocument(paper: Paper, isAnswerKey: boolean): Document {
       children: [new TextRun({ text: `Total Marks: ${paper.totalMarks}` })],
     }),
     new Paragraph({
-      spacing: { after: 200 },
+      spacing: { after: paper.className || paper.section ? 100 : 200 },
       children: [new TextRun({ text: `Duration: ${formatDuration(paper.totalHours)}` })],
     })
   );
+
+  if (paper.className || paper.section) {
+    const classLine = [
+      paper.className ? `Class: ${paper.className}` : '',
+      paper.section ? `Section: ${paper.section}` : '',
+    ]
+      .filter(Boolean)
+      .join('    ');
+    headerParagraphs.push(
+      new Paragraph({
+        spacing: { after: 200 },
+        children: [new TextRun({ text: classLine })],
+      })
+    );
+  }
 
   if (isAnswerKey) {
     return new Document({

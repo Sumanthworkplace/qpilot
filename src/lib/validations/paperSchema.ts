@@ -54,6 +54,8 @@ export const questionSchema = z.object({
 export const paperSchema = z.object({
   title: z.string().min(1).optional(),
   subject: z.string().min(1, 'Subject is required'),
+  className: z.string().optional(),
+  section: z.string().optional(),
   totalMarks: z.number().min(0.5, 'Total marks must be at least 0.5'),
   totalHours: z.number().min(0),
   questions: z.array(questionSchema).min(1, 'At least one question is required'),

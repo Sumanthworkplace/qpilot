@@ -64,12 +64,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { title, subject, totalMarks, totalHours, questions, questionSplitup, schoolId } = parsed.data;
+    const {
+      title,
+      subject,
+      className,
+      section,
+      totalMarks,
+      totalHours,
+      questions,
+      questionSplitup,
+      schoolId,
+    } = parsed.data;
 
     const paper = await prisma.paper.create({
       data: {
         title: title ?? subject,
         subject,
+        className: className ?? null,
+        section: section ?? null,
         totalMarks,
         totalHours,
         userId: userId as string,

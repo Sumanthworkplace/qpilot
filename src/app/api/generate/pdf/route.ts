@@ -161,6 +161,17 @@ function buildHeader(doc: jsPDF, paper: Paper, pageWidth: number) {
     align: 'right',
   });
 
+  if (paper.className || paper.section) {
+    y += 7;
+    const classLine = [
+      paper.className ? `Class: ${paper.className}` : '',
+      paper.section ? `Section: ${paper.section}` : '',
+    ]
+      .filter(Boolean)
+      .join('    ');
+    doc.text(classLine, 20, y);
+  }
+
   y += 4;
   doc.setDrawColor(0);
   doc.setLineWidth(0.3);

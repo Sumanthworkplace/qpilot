@@ -15,6 +15,8 @@ interface BasicDetailsProps {
 export default function BasicDetails({ onValidChange }: BasicDetailsProps) {
   const { paper, setBasicDetails, setSchool } = usePaperStore();
   const [subject, setSubject] = useState(paper.subject);
+  const [className, setClassName] = useState(paper.className ?? '');
+  const [section, setSection] = useState(paper.section ?? '');
   const [totalMarks, setTotalMarks] = useState(paper.totalMarks.toString());
 
   // Duration is stored internally as decimal hours (e.g. 2.5), but entered
@@ -55,14 +57,14 @@ export default function BasicDetails({ onValidChange }: BasicDetailsProps) {
 
     if (isValid) {
       const totalHours = hoursNum + minutesNum / 60;
-      setBasicDetails(subject.trim(), marksNum, totalHours);
+      setBasicDetails(subject.trim(), marksNum, totalHours, className.trim(), section.trim());
     }
   };
 
   useEffect(() => {
     validate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subject, totalMarks, hours, minutes]);
+  }, [subject, className, section, totalMarks, hours, minutes]);
 
   const handleSchoolChange = (school: School | null) => {
     setSchool(school);
@@ -89,18 +91,42 @@ export default function BasicDetails({ onValidChange }: BasicDetailsProps) {
       </div>
 
       <div className="space-y-4">
-        <div>
-          <Label htmlFor="subject">
-            Subject name <span className="text-destructive">*</span>
-          </Label>
-          <Input
-            id="subject"
-            placeholder="e.g., Mathematics, Physics, English"
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-            className={`mt-1.5 ${errors.subject ? 'border-destructive' : ''}`}
-          />
-          {errors.subject && <p className="mt-1 text-sm text-destructive">{errors.subject}</p>}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div>
+            <Label htmlFor="subject">
+              Subject name <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="subject"
+              placeholder="e.g., Mathematics, Physics"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              className={`mt-1.5 ${errors.subject ? 'border-destructive' : ''}`}
+            />
+            {errors.subject && <p className="mt-1 text-sm text-destructive">{errors.subject}</p>}
+          </div>
+
+          <div>
+            <Label htmlFor="className">Class</Label>
+            <Input
+              id="className"
+              placeholder="e.g., 10, XI, Grade 8"
+              value={className}
+              onChange={(e) => setClassName(e.target.value)}
+              className="mt-1.5"
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="section">Section</Label>
+            <Input
+              id="section"
+              placeholder="e.g., A, B, Blue"
+              value={section}
+              onChange={(e) => setSection(e.target.value)}
+              className="mt-1.5"
+            />
+          </div>
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -161,6 +187,8 @@ export default function BasicDetails({ onValidChange }: BasicDetailsProps) {
         <div className="rounded-lg border border-dashed border-border bg-card/60 p-4">
           <p className="text-sm text-muted-foreground">
             <span className="font-medium text-foreground">Preview:</span> {subject || 'Subject'}
+            {className ? ` \u2014 Class ${className}` : ''}
+            {section ? ` ${'\u00b7'} Section ${section}` : ''}
             {' \u2014 '}
             {totalMarks || '0'} marks{' \u2014 '}
             {durationLabel()}

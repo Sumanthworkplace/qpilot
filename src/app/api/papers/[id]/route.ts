@@ -80,7 +80,17 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const { title, subject, totalMarks, totalHours, questions, questionSplitup, schoolId } = parsed.data;
+    const {
+      title,
+      subject,
+      className,
+      section,
+      totalMarks,
+      totalHours,
+      questions,
+      questionSplitup,
+      schoolId,
+    } = parsed.data;
 
     if (questions) {
       await prisma.question.deleteMany({ where: { paperId: params.id } });
@@ -91,6 +101,8 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
       data: {
         ...(title !== undefined && { title }),
         ...(subject !== undefined && { subject }),
+        ...(className !== undefined && { className }),
+        ...(section !== undefined && { section }),
         ...(totalMarks !== undefined && { totalMarks }),
         ...(totalHours !== undefined && { totalHours }),
         ...(schoolId !== undefined && { schoolId }),
