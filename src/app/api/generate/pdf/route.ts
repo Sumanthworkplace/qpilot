@@ -17,6 +17,27 @@ const TYPE_ORDER: QuestionType[] = [
   'IMAGE_BASED',
 ];
 
+// jsPDF's built-in fonts (Helvetica/Times/Courier) use WinAnsi encoding, which
+// doesn't include arrow characters or a few other common symbols. Without this,
+// they render as garbled artifacts (e.g. "!'") instead of failing loudly.
+const UNSUPPORTED_CHAR_MAP: Record<string, string> = {
+  '\u2192': '->',
+  '\u2190': '<-',
+  '\u2194': '<->',
+  '\u21d2': '=>',
+  '\u21d0': '<=',
+  '\u2191': '(up)',
+  '\u2193': '(down)',
+};
+
+function sanitizeForPdf(text: string): string {
+  let result = text;
+  for (const [char, replacement] of Object.entries(UNSUPPORTED_CHAR_MAP)) {
+    result = result.split(char).join(replacement);
+  }
+  return result;
+}
+
 function formatDuration(totalHours: number): string {
   const hours = Math.floor(totalHours);
   const minutes = Math.round((totalHours - hours) * 60);
@@ -50,19 +71,43 @@ function groupByType(questions: Question[]) {
 }
 
 function questionContent(q: Question): string {
-  let content = q.text ?? '';
+  let content = sanitizeForPdf(q.text ?? '');
 
   if (q.type === 'MCQ' && q.options && Array.isArray(q.options)) {
-    content += '\n' + (q.options as string[]).map((o, i) => `${String.fromCharCode(97 + i)}) ${o}`).join('\n');
+    content +=
+      '\n' +
+      (q.options as string[])
+        .map((o, i) => `${String.fromCharCode(97 + i)}) ${sanitizeForPdf(o)}`)
+        .join('\n');
   } else if (q.type === 'TRUE_FALSE') {
     content += '\n(True / False)';
   } else if (q.type === 'MATCH_THE_FOLLOWING' && q.options && !Array.isArray(q.options)) {
     const pairs = q.options as { left: string[]; right: string[] };
-    const rows = pairs.left.map((l, i) => `${i + 1}. ${l}    \u2014    ${pairs.right[i] ?? ''}`);
+    const rows = pairs.left.map(
+      (l, i) => `${i + 1}. ${sanitizeForPdf(l)}    \u2014    ${sanitizeForPdf(pairs.right[i] ?? '')}`
+    );
     content += '\n' + rows.join('\n');
   }
 
   return content;
+}
+
+// Counts the actual visual lines a piece of text will occupy once word-wrapped
+// to the given column width - not just literal '\n'-separated segments. Using
+// the naive segment count previously caused images to overlap text whenever a
+// question wrapped onto more lines than it had explicit newlines for.
+function countWrappedLines(doc: jsPDF, content: string, maxWidthMm: number): number {
+  const segments = content.split('\n');
+  let total = 0;
+  segments.forEach((segment) => {
+    if (segment === '') {
+      total += 1;
+      return;
+    }
+    const wrapped = doc.splitTextToSize(segment, maxWidthMm);
+    total += wrapped.length;
+  });
+  return total;
 }
 
 interface RowImage {
@@ -213,6 +258,21 @@ function generateQuestionPaper(paper: Paper): jsPDF {
   const IMAGE_MAX_WIDTH_MM = 70;
   const IMAGE_MAX_HEIGHT_MM = 90;
 
+  const SECTION_COL_MM = 22;
+  const NUM_COL_MM = 10;
+  const MARKS_COL_MM = 16;
+  const TABLE_MARGIN_MM = 40; // left + right
+  const QUESTION_COL_WIDTH_MM =
+    pageWidth - TABLE_MARGIN_MM - SECTION_COL_MM - NUM_COL_MM - MARKS_COL_MM - CELL_PADDING_MM * 2;
+
+  doc.setFontSize(FONT_SIZE);
+
+  // Justify reads badly on structured multi-line content like lettered MCQ
+  // options or True/False - each short line gets stretched individually. Only
+  // plain flowing paragraph text (descriptive/short-answer/etc.) should justify.
+  const STRUCTURED_TYPES: QuestionType[] = ['MCQ', 'TRUE_FALSE', 'MATCH_THE_FOLLOWING'];
+  const rowsNeedingLeftAlign = new Set<number>();
+
   groups.forEach((group, gIdx) => {
     const letter = gIdx < SECTION_LETTERS.length ? SECTION_LETTERS[gIdx] : gIdx + 1;
     const groupHasImage = group.some((q) => parseDataUrl(q.imageUrl));
@@ -230,12 +290,19 @@ function generateQuestionPaper(paper: Paper): jsPDF {
 
       let content = questionContent(q);
       const parsed = parseDataUrl(q.imageUrl);
+      const rowIndex = body.length;
+
+      if (STRUCTURED_TYPES.includes(q.type)) {
+        rowsNeedingLeftAlign.add(rowIndex);
+      }
 
       if (parsed) {
         const size = computeImageSizeMm(parsed, IMAGE_MAX_WIDTH_MM, IMAGE_MAX_HEIGHT_MM);
         if (size) {
-          const rowIndex = body.length;
-          const textLineCount = content.split('\n').length;
+          // Use actual wrapped-line count (accounts for word-wrap), not just
+          // literal newline count - otherwise long questions get their image
+          // overlapping still-wrapping text.
+          const textLineCount = countWrappedLines(doc, content, QUESTION_COL_WIDTH_MM);
           rowImages[rowIndex] = { buffer: parsed.buffer, format: parsed.format, textLineCount, ...size };
           // Pad the cell with blank lines so autoTable computes a tall enough row
           // to fit the image beneath the text, then draw it in didDrawCell below.
@@ -267,12 +334,27 @@ function generateQuestionPaper(paper: Paper): jsPDF {
     styles: { fontSize: FONT_SIZE, cellPadding: CELL_PADDING_MM, valign: 'top', lineColor: [0, 0, 0], lineWidth: 0.2 },
     headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold' },
     columnStyles: {
-      0: { cellWidth: 22, fontStyle: 'bold', valign: 'middle', halign: 'center' },
-      1: { cellWidth: 10 },
-      3: { cellWidth: 16, halign: 'center' },
+      0: { cellWidth: SECTION_COL_MM, fontStyle: 'bold', valign: 'middle', halign: 'center' },
+      1: { cellWidth: NUM_COL_MM },
+      2: { halign: 'justify' },
+      3: { cellWidth: MARKS_COL_MM, halign: 'center' },
     },
     margin: { left: 20, right: 20 },
     rowPageBreak: 'avoid',
+    didParseCell: (data: any) => {
+      // Justify breaks on blank lines (used to reserve vertical space for images)
+      // because there are no words to stretch, producing malformed PDF text
+      // operators. It also looks wrong on structured content like lettered MCQ
+      // options, where each short line gets stretched individually. Force
+      // left-alignment for both cases.
+      if (
+        data.section === 'body' &&
+        data.column.index === 2 &&
+        (rowImages[data.row.index] || rowsNeedingLeftAlign.has(data.row.index))
+      ) {
+        data.cell.styles.halign = 'left';
+      }
+    },
     didDrawCell: (data: any) => {
       if (data.section !== 'body' || data.column.index !== 2) return;
       const img = rowImages[data.row.index];
@@ -338,7 +420,7 @@ function generateAnswerKey(paper: Paper): jsPDF {
 
       const row: (string | number | { content: string; rowSpan: number })[] =
         i === 0 ? [{ content: `SECTION ${letter}`, rowSpan: group.length }] : [];
-      row.push(`${qNum}.`, q.text ?? '', answerText);
+      row.push(`${qNum}.`, sanitizeForPdf(q.text ?? ''), sanitizeForPdf(answerText));
       body.push(row);
       qNum++;
     });
@@ -355,6 +437,7 @@ function generateAnswerKey(paper: Paper): jsPDF {
     columnStyles: {
       0: { cellWidth: 22, fontStyle: 'bold', valign: 'middle', halign: 'center' },
       1: { cellWidth: 10 },
+      2: { halign: 'justify' },
       3: { cellWidth: 45, textColor: [22, 101, 52] },
     },
     margin: { left: 20, right: 20 },
